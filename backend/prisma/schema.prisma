@@ -1,0 +1,164 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  MINISTER
+  MINISTRY
+  STATE
+  DISTRICT
+}
+
+enum RiskLevel {
+  LOW
+  MODERATE
+  HIGH
+  CRITICAL
+}
+
+enum CaseStatus {
+  OPEN
+  UNDER_REVIEW
+  ESCALATED
+  RESOLVED
+  DISMISSED
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+model User {
+  id           String        @id @default(uuid())
+  authorityId  String        @unique
+  name         String
+  email        String        @unique
+  passwordHash String
+  role         Role
+  state        String?       @default("All India")
+  district     String?       @default("All Districts")
+  createdCases Case[]        @relation("CreatedBy")
+  actions      CaseAction[]
+  auditLogs    AuditLog[]
+  createdAt    DateTime      @default(now())
+}
+
+model MP {
+  id           String    @id @default(uuid())
+  name         String
+  house        String    // Lok Sabha / Rajya Sabha
+  constituency String
+  state        String
+  projects     Project[]
+}
+
+model Vendor {
+  id               String    @id @default(uuid())
+  vendorId         String    @unique
+  name             String
+  gstin            String?
+  totalProjects    Int       @default(0)
+  totalExpenditure Float     @default(0.0)
+  riskLevel        RiskLevel @default(LOW)
+  projects         Project[]
+}
+
+model Project {
+  id                  String          @id @default(uuid())
+  projectId           String          @unique
+  workTitle           String
+  category            String
+  state               String
+  district            String
+  constituency        String
+  mpId                String
+  mp                  MP              @relation(fields: [mpId], references: [id])
+  implementingAgency  String
+  vendorId            String?
+  vendor              Vendor?         @relation(fields: [vendorId], references: [id])
+  recommendedAmount   Float
+  sanctionedAmount    Float
+  actualExpenditure   Float           @default(0.0)
+  recommendationDate  DateTime
+  sanctionDate        DateTime?
+  targetCompletionDate DateTime?
+  actualCompletionDate DateTime?
+  status              String
+  riskScore           Float           @default(0.0)
+  riskLevel           RiskLevel       @default(LOW)
+  regLatitude         Float?
+  regLongitude        Float?
+  evidenceLatitude    Float?
+  evidenceLongitude   Float?
+  gpsDistanceMeters   Float?
+  beforePhotoUrl      String?
+  afterPhotoUrl       String?
+  photoHash           String?
+  anomalies           Anomaly[]
+  cases               Case[]
+  auditLogs           AuditLog[]
+  createdAt           DateTime        @default(now())
+}
+
+model Anomaly {
+  id            String    @id @default(uuid())
+  projectId     String
+  project       Project   @relation(fields: [projectId], references: [id])
+  anomalyType   String
+  severity      RiskLevel
+  scoreContribution Float
+  title         String
+  explanation   String
+  supportingMetric String
+  createdAt     DateTime  @default(now())
+}
+
+model Case {
+  id            String       @id @default(uuid())
+  caseNumber    String       @unique
+  projectId     String
+  project       Project      @relation(fields: [projectId], references: [id])
+  title         String
+  priority      Priority     @default(MEDIUM)
+  status        CaseStatus   @default(OPEN)
+  assignedRole  Role         @default(DISTRICT)
+  assignedState String?
+  assignedDistrict String?
+  createdById   String
+  createdBy     User         @relation("CreatedBy", fields: [createdById], references: [id])
+  actions       CaseAction[]
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+}
+
+model CaseAction {
+  id        String   @id @default(uuid())
+  caseId    String
+  case      Case     @relation(fields: [caseId], references: [id])
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  action    String
+  notes     String?
+  createdAt DateTime @default(now())
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id])
+  projectId String?
+  project   Project? @relation(fields: [projectId], references: [id])
+  action    String
+  entity    String
+  details   String
+  ipAddress String?
+  timestamp DateTime @default(now())
+}

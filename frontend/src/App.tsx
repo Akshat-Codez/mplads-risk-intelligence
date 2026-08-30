@@ -19,14 +19,8 @@ import { AuditTrail } from './pages/AuditTrail';
 import { DataIngestion } from './pages/DataIngestion';
 
 const RoleBasedHome: React.FC = () => {
-  const { role } = useAuth();
-  switch (role) {
-    case 'MINISTER': return <MinisterDashboard />;
-    case 'MINISTRY': return <MinistryDashboard />;
-    case 'STATE': return <StateDashboard />;
-    case 'DISTRICT': return <DistrictDashboard />;
-    default: return <MinistryDashboard />;
-  }
+  // For the SIH MVP, all roles point to the unified data-aware Risk Intelligence Dashboard
+  return <MinistryDashboard />;
 };
 
 const ProtectedLayout: React.FC = () => {
@@ -41,10 +35,10 @@ const ProtectedLayout: React.FC = () => {
         <main className="flex-1">
           <Routes>
             <Route path="/" element={<RoleBasedHome />} />
-            <Route path="/minister" element={<MinisterDashboard />} />
+            <Route path="/minister" element={<MinistryDashboard />} />
             <Route path="/ministry" element={<MinistryDashboard />} />
-            <Route path="/state" element={<StateDashboard />} />
-            <Route path="/district" element={<DistrictDashboard />} />
+            <Route path="/state" element={<MinistryDashboard />} />
+            <Route path="/district" element={<MinistryDashboard />} />
             <Route path="/projects" element={<Projects />} />
             <Route path="/projects/:id" element={<ProjectDetail />} />
             <Route path="/risk-intelligence" element={<RoleBasedHome />} />

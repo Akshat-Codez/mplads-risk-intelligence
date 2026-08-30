@@ -1,207 +1,277 @@
-import React from 'react';
-import { useNavigate } from 'react-router-dom';
-import { ShieldAlert, BarChart3, MapPin, Building2, TrendingUp, AlertTriangle, FileText, CheckCircle2 } from '../../components/common/Icons';
-import { ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, XAxis, YAxis, Tooltip } from 'recharts';
-import { MOCK_PROJECTS } from '../../data/mockData';
-
-const RISK_PIE_DATA = [
-  { name: 'Low Risk (0-29)', value: 85, color: '#10B981' },
-  { name: 'Moderate Risk (30-59)', value: 10, color: '#F59E0B' },
-  { name: 'High Risk (60-79)', value: 3, color: '#EF4444' },
-  { name: 'Critical Risk (80-100)', value: 2, color: '#991B1B' }
-];
-
-const ANOMALY_LINE_DATA = [
-  { month: 'Jan', anomalies: 120 },
-  { month: 'Feb', anomalies: 145 },
-  { month: 'Mar', anomalies: 190 },
-  { month: 'Apr', anomalies: 165 },
-  { month: 'May', anomalies: 210 },
-  { month: 'Jun', anomalies: 185 },
-  { month: 'Jul', anomalies: 240 }
-];
-
-const BOQ_EXTRACTIONS = [
-  { item: 'Solar Street Light (60W LED + LiFePO4 Battery)', quotedRate: 84000, referenceSSR: 28500, unit: 'Per Unit', deviation: '+294.7%', risk: 'CRITICAL' },
-  { item: 'Deep Rig Borewell Drilling (150mm dia)', quotedRate: 3400, referenceSSR: 1850, unit: 'Per Meter', deviation: '+83.7%', risk: 'HIGH' },
-  { item: 'Ready Mix Concrete M25 Grade', quotedRate: 7800, referenceSSR: 5200, unit: 'Per Cu.m', deviation: '+50.0%', risk: 'MODERATE' },
-  { item: 'Galvanized Iron Hand Pump Assembly', quotedRate: 45000, referenceSSR: 43500, unit: 'Per Unit', deviation: '+3.4%', risk: 'LOW' }
-];
+import React, { useEffect, useState } from 'react';
+import axios from 'axios';
+import { ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 
 export const Dashboard: React.FC = () => {
-  const navigate = useNavigate();
+  const [stats, setStats] = useState<any>(null);
+  const [datasetInfo, setDatasetInfo] = useState<any>(null);
+  const [highRiskWorks, setHighRiskWorks] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [expandedRow, setExpandedRow] = useState<string | null>(null);
+
+  const fetchWorks = async () => {
+    try {
+      const worksRes = await axios.get('http://localhost:8000/api/works?risk_level=HIGH');
+      setHighRiskWorks(worksRes.data);
+    } catch (e) {}
+  };
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const [statsRes, infoRes] = await Promise.all([
+          axios.get('http://localhost:8000/api/dashboard/stats'),
+          axios.get('http://localhost:8000/api/dataset-info')
+        ]);
+        setStats(statsRes.data);
+        setDatasetInfo(infoRes.data);
+        await fetchWorks();
+      } catch (err) {
+        console.error("Failed to fetch dashboard data", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchData();
+  }, []);
+
+  const handleUpdateInvestigation = async (workId: string, status: string) => {
+    try {
+      await axios.post(`http://localhost:8000/api/works/${encodeURIComponent(workId)}/investigate`, {
+        status: status,
+        notes: ""
+      });
+      alert('Investigation updated successfully!');
+      fetchWorks(); // refresh
+    } catch (err) {
+      alert("Failed to update investigation");
+    }
+  };
+
+  if (loading) return <div className="p-8 text-center text-slate-500 font-bold">Loading Live Analytics...</div>;
+
+  const RISK_PIE_DATA = [
+    { name: 'Low Risk', value: stats?.total_works - stats?.medium_risk_count - stats?.high_risk_count || 0, color: '#10B981' },
+    { name: 'Medium Risk', value: stats?.medium_risk_count || 0, color: '#F59E0B' },
+    { name: 'High Risk', value: stats?.high_risk_count || 0, color: '#EF4444' }
+  ];
 
   return (
-    <div className="p-6 space-y-6 font-sans">
+    <div className="p-6 space-y-6 font-sans bg-slate-50 min-h-screen">
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-slate-200 pb-4">
         <div>
-          <div className="flex items-center space-x-2">
-            <span className="bg-blue-100 text-blue-800 border border-blue-200 text-xs px-3 py-0.5 rounded-full font-bold">
-              National Risk Intelligence Hub • MoSPI Data Informatics Division
-            </span>
-          </div>
-          <h1 className="text-2xl font-extrabold text-slate-900 font-serif mt-1">Ministry Operations Dashboard</h1>
-          <p className="text-xs text-slate-500">Real-time AI cross-verification of 1.42 Lakh MPLADS projects across all States & Union Territories</p>
+          <h1 className="text-2xl font-extrabold text-slate-900 mt-1">MPLADS Risk Intelligence Dashboard</h1>
+          <p className="text-xs text-slate-500">Live AI cross-verification prototype (SIH 2026 PS 102)</p>
         </div>
-        <div className="flex items-center space-x-2">
-          <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs px-3 py-1 rounded-full font-bold flex items-center space-x-1.5">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            <span>e-SAKSHI Stream Live Sync</span>
-          </span>
+        <button 
+          onClick={async () => {
+            setLoading(true);
+            try {
+               await axios.post('http://localhost:8000/api/run_analysis');
+               // Refresh the page data
+               const [statsRes, infoRes] = await Promise.all([
+                 axios.get('http://localhost:8000/api/dashboard/stats'),
+                 axios.get('http://localhost:8000/api/dataset-info')
+               ]);
+               setStats(statsRes.data);
+               setDatasetInfo(infoRes.data);
+               await fetchWorks();
+            } catch (e) {
+               alert("Failed to run analysis");
+            } finally {
+               setLoading(false);
+            }
+          }}
+          className="bg-blue-600 hover:bg-blue-700 text-white text-xs px-4 py-2 rounded-lg font-bold shadow flex items-center space-x-2 transition">
+          <span>Run AI Analysis</span>
+        </button>
+      </div>
+
+      {/* Data Source Indicator */}
+      <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 flex justify-between items-center text-xs">
+        <div>
+          <span className="font-bold text-blue-900 block mb-1">DATA SOURCE</span>
+          <span className="text-blue-700">Source: {datasetInfo?.source} | Records: {datasetInfo?.records} | Fields Available: {datasetInfo?.available_fields}</span>
+        </div>
+        <div className="text-right">
+          {!datasetInfo?.has_geolocation && (
+             <span className="bg-amber-100 text-amber-800 border border-amber-200 px-2 py-1 rounded font-semibold">Geolocation analysis disabled (No GPS data in source)</span>
+          )}
         </div>
       </div>
 
-      {/* National KPI Grid */}
+      {/* KPI Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-1">
           <p className="text-xs text-slate-500 font-medium">Total Tracked Works</p>
-          <h3 className="text-2xl font-extrabold text-slate-900">1,42,850</h3>
-          <p className="text-[11px] text-slate-400">All India Coverage</p>
+          <h3 className="text-2xl font-extrabold text-slate-900">{stats?.total_works.toLocaleString()}</h3>
         </div>
         <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-1">
           <p className="text-xs text-slate-500 font-medium">Total Sanctioned Value</p>
-          <h3 className="text-2xl font-extrabold text-blue-600">₹2,715 Cr</h3>
-          <p className="text-[11px] text-blue-600 font-bold">100% Allocation Released</p>
+          <h3 className="text-2xl font-extrabold text-blue-600">₹{(stats?.total_sanctioned / 100000).toFixed(1)} L</h3>
         </div>
         <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-1">
-          <p className="text-xs text-slate-500 font-medium">High Risk Flagged Projects</p>
-          <h3 className="text-2xl font-extrabold text-red-600">3,412</h3>
-          <p className="text-[11px] text-red-500 font-bold">2.38% Anomaly Rate</p>
+          <p className="text-xs text-slate-500 font-medium">High Risk Flagged</p>
+          <h3 className="text-2xl font-extrabold text-red-600">{stats?.high_risk_count}</h3>
         </div>
         <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-1">
-          <p className="text-xs text-slate-500 font-medium">Active Investigation Cases</p>
-          <h3 className="text-2xl font-extrabold text-amber-600">142</h3>
-          <p className="text-[11px] text-slate-500">Under Officer Review</p>
+          <p className="text-xs text-slate-500 font-medium">Potentially Similar Works</p>
+          <h3 className="text-2xl font-extrabold text-amber-600">{stats?.similar_works_count}</h3>
         </div>
       </div>
 
-      {/* FEATURE 3: BOQ PDF Rate Extraction & CPWD SSR Benchmark Visualizer */}
-      <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-4 border-l-4 border-l-blue-600">
-        <div className="flex justify-between items-center border-b pb-3">
-          <div>
-            <div className="flex items-center space-x-2">
-              <span className="bg-blue-100 text-blue-800 text-[10px] font-extrabold px-2.5 py-0.5 rounded-full uppercase">
-                FEATURE 3: Tender Procurement AI Extraction
-              </span>
-              <span className="text-xs text-slate-500 font-semibold">OCR + CPWD Standard Schedule of Rates (SSR) Benchmark</span>
-            </div>
-            <h3 className="text-base font-bold text-slate-900 mt-1">Tender BOQ Item Price Inflation Analyzer</h3>
-            <p className="text-xs text-slate-500">Extracts itemized unit rates from uploaded work-order PDFs and compares against official reference rates.</p>
-          </div>
-          <span className="bg-red-50 text-red-700 border border-red-200 text-xs px-3 py-1 rounded-full font-bold">
-            ⚠ 1 Critical Rate Inflation Flagged
-          </span>
-        </div>
-
-        <table className="w-full text-left text-xs">
-          <thead className="bg-slate-50 border-b border-slate-200 text-slate-700 font-semibold uppercase">
-            <tr>
-              <th className="p-3">Extracted BOQ Item Description</th>
-              <th className="p-3">Unit</th>
-              <th className="p-3">Tender Quoted Rate</th>
-              <th className="p-3">CPWD Reference SSR Rate</th>
-              <th className="p-3">Price Deviation</th>
-              <th className="p-3">Risk Signal</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-200">
-            {BOQ_EXTRACTIONS.map(item => (
-              <tr key={item.item} className="hover:bg-slate-50">
-                <td className="p-3 font-bold text-slate-900">{item.item}</td>
-                <td className="p-3 text-slate-600">{item.unit}</td>
-                <td className="p-3 font-bold text-red-600">₹{item.quotedRate.toLocaleString('en-IN')}</td>
-                <td className="p-3 font-bold text-slate-700">₹{item.referenceSSR.toLocaleString('en-IN')}</td>
-                <td className="p-3 font-extrabold text-red-600">{item.deviation}</td>
-                <td className="p-3">
-                  <span className={`px-2.5 py-0.5 rounded font-extrabold text-[10px] ${
-                    item.risk === 'CRITICAL' ? 'bg-red-100 text-red-700 border border-red-200' :
-                    item.risk === 'HIGH' ? 'bg-amber-100 text-amber-700 border border-amber-200' : 'bg-slate-100 text-slate-700'
-                  }`}>
-                    {item.risk}
-                  </span>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      {/* Analytics Charts Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Risk Level Distribution */}
-        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-4">
-          <h3 className="text-sm font-bold text-slate-900">National Risk Level Distribution (PieChart)</h3>
-          <div className="h-52">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie data={RISK_PIE_DATA} innerRadius={50} outerRadius={70} paddingAngle={4} dataKey="value">
-                  {RISK_PIE_DATA.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
-                  ))}
-                </Pie>
-                <Tooltip />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-          <div className="grid grid-cols-2 gap-2 text-[11px]">
-            {RISK_PIE_DATA.map(item => (
-              <div key={item.name} className="flex justify-between items-center p-2 bg-slate-50 rounded">
-                <span className="flex items-center space-x-1.5">
-                  <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: item.color }} />
-                  <span className="text-slate-600">{item.name}</span>
-                </span>
-                <span className="font-bold text-slate-900">{item.value}%</span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Anomalies Over Time */}
-        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-4">
-          <h3 className="text-sm font-bold text-slate-900">Anomalies Detected Over Time (LineChart)</h3>
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={ANOMALY_LINE_DATA}>
-                <XAxis dataKey="month" stroke="#94a3b8" fontSize={11} />
-                <YAxis stroke="#94a3b8" fontSize={11} />
-                <Tooltip />
-                <Line type="monotone" dataKey="anomalies" stroke="#EF4444" strokeWidth={3} dot={{ r: 4 }} />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-      </div>
-
-      {/* Priority Flagged Projects Table */}
+      {/* Priority Flagged Projects Table with Inline Expansion */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 space-y-4">
-        <h3 className="text-sm font-bold text-slate-900">High-Risk Flagged Works Queue</h3>
+        <h3 className="text-sm font-bold text-slate-900">HIGH RISK WORKS</h3>
         <table className="w-full text-left text-xs">
           <thead className="bg-slate-50 border-b border-slate-200 text-slate-700 font-semibold uppercase">
             <tr>
-              <th className="p-3">Project Title & ID</th>
-              <th className="p-3">State & District</th>
-              <th className="p-3">Sanctioned</th>
+              <th className="p-3">Work ID & Title</th>
+              <th className="p-3">District</th>
+              <th className="p-3">Sanctioned Amount</th>
               <th className="p-3">Risk Score</th>
+              <th className="p-3">Primary Alert</th>
               <th className="p-3">Action</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-200">
-            {MOCK_PROJECTS.map(p => (
-              <tr key={p.id} className="hover:bg-slate-50">
-                <td className="p-3">
-                  <p className="font-bold text-slate-900">{p.workTitle}</p>
-                  <p className="text-[10px] text-slate-500 font-mono">{p.projectId}</p>
-                </td>
-                <td className="p-3 text-slate-700">{p.district}, {p.state}</td>
-                <td className="p-3 font-semibold text-slate-900">₹{(p.sanctionedAmount/100000).toFixed(1)} L</td>
-                <td className="p-3 font-bold text-red-600">{p.riskScore}/100</td>
-                <td className="p-3">
-                  <button onClick={() => navigate(`/projects/${p.id}`)} className="bg-blue-600 text-white font-bold text-[11px] px-3 py-1 rounded">
-                    Inspect
-                  </button>
-                </td>
-              </tr>
+            {highRiskWorks.map(w => (
+              <React.Fragment key={w.work_id}>
+                <tr className={`hover:bg-slate-50 ${expandedRow === w.work_id ? 'bg-slate-50' : ''}`}>
+                  <td className="p-3">
+                    <p className="font-bold text-slate-900">{w.work_description}</p>
+                    <p className="font-mono text-[10px] text-slate-500">{w.work_id}</p>
+                  </td>
+                  <td className="p-3 text-slate-700">{w.district}</td>
+                  <td className="p-3 font-semibold text-slate-900">₹{(w.sanctioned_amount / 100000).toFixed(1)} L</td>
+                  <td className="p-3">
+                    <span className="font-bold text-red-600">{w.prototype_risk_score}/100</span>
+                    <span className="block text-[10px] text-red-500 font-semibold">HIGH</span>
+                  </td>
+                  <td className="p-3 font-semibold text-slate-700">
+                    {w.risk_evidence_explanation.split(' | ')[0] || "Anomaly"}
+                  </td>
+                  <td className="p-3">
+                    <button 
+                      onClick={() => setExpandedRow(expandedRow === w.work_id ? null : w.work_id)} 
+                      className="bg-slate-200 text-slate-800 font-bold text-[11px] px-3 py-1 rounded hover:bg-slate-300"
+                    >
+                      {expandedRow === w.work_id ? 'Hide Analysis ▲' : 'View Analysis ▼'}
+                    </button>
+                  </td>
+                </tr>
+                {expandedRow === w.work_id && (
+                  <tr>
+                    <td colSpan={6} className="p-0 border-b border-slate-200">
+                      <div className="bg-slate-50 p-6 shadow-inner border-l-4 border-l-red-600">
+                        <div className="flex justify-between items-start mb-6">
+                           <div>
+                              <h4 className="text-sm font-extrabold text-slate-900 uppercase">Work Analysis</h4>
+                              <p className="text-xs text-slate-500 mt-1">Prototype Risk Score is a prioritization signal for human review, not proof of fraud.</p>
+                           </div>
+                           <div className="text-right">
+                              <span className="block text-xs font-bold text-slate-700 mb-1">Human Verification Status:</span>
+                              <select 
+                                value={w.investigation_status || 'Unreviewed'}
+                                onChange={(e) => handleUpdateInvestigation(w.work_id, e.target.value)}
+                                className="bg-white border border-slate-300 rounded px-2 py-1 text-xs font-semibold"
+                              >
+                                <option value="Unreviewed">Unreviewed</option>
+                                <option value="Needs Verification">Needs Verification</option>
+                                <option value="Legitimate / False Positive">False Positive</option>
+                                <option value="Under Investigation">Under Investigation</option>
+                                <option value="Confirmed Irregularity">Confirmed Irregularity</option>
+                              </select>
+                           </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                          {/* Left Column: Reasons & Evidence */}
+                          <div className="space-y-4">
+                            <div className="bg-indigo-50 border border-indigo-100 p-4 rounded-lg space-y-1 shadow-sm">
+                               <div className="flex items-center space-x-1.5 mb-1.5">
+                                 <span className="text-indigo-600 font-extrabold text-xs tracking-wider">AI SCORE JUSTIFICATION</span>
+                                 <span className="bg-indigo-200 text-indigo-800 text-[9px] px-1.5 py-0.5 rounded uppercase font-bold">Auto-Generated</span>
+                               </div>
+                               <p className="text-indigo-900 text-sm font-medium leading-relaxed">
+                                 {w.ai_justification_summary}
+                               </p>
+                            </div>
+
+                            <h5 className="font-bold text-slate-800 border-b pb-1 mt-4">WHY WAS THIS FLAGGED?</h5>
+                            {w.structured_reasons_parsed?.map((reason: any, idx: number) => (
+                              <div key={idx} className="bg-white p-3 rounded border border-slate-200 space-y-2 shadow-sm">
+                                <div className="flex justify-between items-center">
+                                  <span className="font-bold text-red-700 text-xs">{idx + 1}. {reason.type}</span>
+                                </div>
+                                <p className="text-slate-700 text-xs leading-relaxed">{reason.explanation}</p>
+                                
+                                <div className="mt-2 bg-slate-50 p-2 rounded text-[10px] font-mono border border-slate-100">
+                                   <div className="text-slate-500 font-semibold mb-1">SUPPORTING EVIDENCE</div>
+                                   <div className="text-slate-800">{reason.evidence}</div>
+                                   <div className="text-slate-500 mt-1">Calculation: {reason.calculation}</div>
+                                </div>
+                              </div>
+                            ))}
+                            
+                            <div className="bg-amber-50 p-3 rounded border border-amber-200 mt-4">
+                              <span className="font-bold text-amber-800 text-xs block mb-1">RECOMMENDED ACTION</span>
+                              <span className="text-amber-700 text-xs">Potential irregularity / anomaly requiring human verification. Verify records and supporting documentation.</span>
+                            </div>
+                          </div>
+
+                          {/* Right Column: Score Breakdown */}
+                          <div>
+                             <h5 className="font-bold text-slate-800 border-b pb-1 mb-3">RISK SCORE BREAKDOWN</h5>
+                             <div className="bg-white p-4 rounded border border-slate-200 shadow-sm">
+                                <table className="w-full text-xs text-left mb-2">
+                                  <tbody>
+                                    <tr className="border-b border-slate-100">
+                                      <td className="py-2 text-slate-600">Financial anomaly</td>
+                                      <td className="py-2 text-right font-mono font-bold text-slate-900">{w.risk_components_parsed?.financial || 0}/40</td>
+                                    </tr>
+                                    <tr className="border-b border-slate-100">
+                                      <td className="py-2 text-slate-600">Peer deviation</td>
+                                      <td className="py-2 text-right font-mono font-bold text-slate-900">Included in Financial</td>
+                                    </tr>
+                                    <tr className="border-b border-slate-100">
+                                      <td className="py-2 text-slate-600">ML anomaly (Isolation Forest)</td>
+                                      <td className="py-2 text-right font-mono font-bold text-slate-900">{w.risk_components_parsed?.ml || 0}/25</td>
+                                    </tr>
+                                    <tr className="border-b border-slate-100">
+                                      <td className="py-2 text-slate-600">Payment anomaly</td>
+                                      <td className="py-2 text-right font-mono font-bold text-slate-900">{w.risk_components_parsed?.payment || 0}/15</td>
+                                    </tr>
+                                    <tr className="border-b border-slate-100">
+                                      <td className="py-2 text-slate-600">Delay anomaly</td>
+                                      <td className="py-2 text-right font-mono font-bold text-slate-900">{w.risk_components_parsed?.delay || 0}/10</td>
+                                    </tr>
+                                    <tr className="border-b border-slate-200">
+                                      <td className="py-2 text-slate-600">Similarity / Duplication</td>
+                                      <td className="py-2 text-right font-mono font-bold text-slate-900">{w.risk_components_parsed?.similarity || 0}/10</td>
+                                    </tr>
+                                    <tr>
+                                      <td className="py-3 font-extrabold text-slate-900 uppercase">Total Prototype Score</td>
+                                      <td className="py-3 text-right font-mono font-extrabold text-red-600 text-sm">{w.prototype_risk_score}/100</td>
+                                    </tr>
+                                  </tbody>
+                                </table>
+                             </div>
+
+                             {!datasetInfo?.has_geolocation && (
+                                <div className="mt-4 p-3 bg-slate-100 rounded border border-slate-200 text-xs text-slate-500 text-center italic">
+                                  Geolocation analysis unavailable — GPS coordinates are not present in the uploaded dataset.
+                                </div>
+                             )}
+                          </div>
+                        </div>
+
+                      </div>
+                    </td>
+                  </tr>
+                )}
+              </React.Fragment>
             ))}
           </tbody>
         </table>

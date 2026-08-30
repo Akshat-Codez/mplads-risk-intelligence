@@ -118,7 +118,7 @@ class RiskEngine:
         
         risk_scores = []
         risk_levels = []
-        explanations = []
+        explanations_json = []
         risk_components = []
 
         for _, row in self.df.iterrows():
@@ -134,18 +134,33 @@ class RiskEngine:
             
             # --- Financial Signal (Max 40) ---
             fin_score = 0
+            
+            sanc_amt = row.get('sanctioned_amount', 0)
+            exp_amt = row.get('total_disbursed', 0)
+            
             if pd.notna(row.get('expenditure_ratio')) and row['expenditure_ratio'] > 1.0:
                 fin_score += 15
-                reasons.append(f"Expenditure exceeds sanctioned amount by {((row['expenditure_ratio']-1)*100):.1f}%.")
+                ratio_pct = ((row['expenditure_ratio']-1)*100)
+                reasons.append({
+                    "type": "Financial Anomaly",
+                    "evidence": f"Expenditure = ₹{exp_amt:,.2f} | Sanctioned = ₹{sanc_amt:,.2f}",
+                    "calculation": f"(Expenditure - Sanctioned) / Sanctioned * 100 = {ratio_pct:.1f}%",
+                    "explanation": f"Expenditure is {ratio_pct:.1f}% above the sanctioned amount.",
+                    "score": 15
+                })
             
             peer_dev = row.get('peer_deviation', 0)
-            if pd.notna(peer_dev):
-                if peer_dev > 0.5:
-                    fin_score += 25
-                    reasons.append(f"Expenditure is {peer_dev*100:.1f}% above the median of comparable works in this district.")
-                elif peer_dev > 0.2:
-                    fin_score += 10
-                    reasons.append(f"Expenditure is {peer_dev*100:.1f}% above the median of comparable works in this district.")
+            peer_med = row.get('peer_median_amount', 0)
+            if pd.notna(peer_dev) and peer_dev > 0.2:
+                points = 25 if peer_dev > 0.5 else 10
+                fin_score += points
+                reasons.append({
+                    "type": "Peer Deviation",
+                    "evidence": f"Expenditure = ₹{exp_amt:,.2f} | Peer Median = ₹{peer_med:,.2f}",
+                    "calculation": f"(Expenditure - Peer Median) / Peer Median = {peer_dev*100:.1f}%",
+                    "explanation": f"The expenditure is {peer_dev*100:.1f}% higher than comparable works in the available dataset.",
+                    "score": points
+                })
             
             comps['financial'] = min(fin_score, 40)
             score += comps['financial']
@@ -154,16 +169,37 @@ class RiskEngine:
             if row.get('if_anomaly_signal', False):
                 comps['ml'] = 25
                 score += comps['ml']
-                reasons.append("Isolation Forest AI model flagged this project's structural patterns as highly unusual.")
+                reasons.append({
+                    "type": "ML Anomaly",
+                    "evidence": "Isolation Forest Model Prediction = -1 (Anomaly)",
+                    "calculation": "Algorithm evaluates distance of 8 numerical features from normal clusters.",
+                    "explanation": "The Isolation Forest model classified this work as an unusual observation based on its numerical features.",
+                    "score": 25
+                })
                 
             # --- Payment Signal (Max 15) ---
             pay_score = 0
-            if pd.notna(row.get('payment_count')) and row['payment_count'] >= 4:
+            pay_count = row.get('payment_count', 0)
+            pay_dur = row.get('payment_duration_days', 0)
+            
+            if pd.notna(pay_count) and pay_count >= 4:
                 pay_score += 10
-                reasons.append(f"Unusual payment pattern: {int(row['payment_count'])} separate disbursements detected.")
-            if pd.notna(row.get('payment_duration_days')) and row.get('payment_count', 0) >= 2 and row['payment_duration_days'] < 7:
+                reasons.append({
+                    "type": "Payment Anomaly",
+                    "evidence": f"Total Installments = {int(pay_count)}",
+                    "calculation": f"{int(pay_count)} >= 4 installments threshold",
+                    "explanation": f"Unusual payment pattern: {int(pay_count)} separate disbursements detected.",
+                    "score": 10
+                })
+            if pd.notna(pay_dur) and pay_count >= 2 and pay_dur < 7:
                 pay_score += 5
-                reasons.append(f"Multiple disbursements executed within a very short timeframe ({int(row['payment_duration_days'])} days).")
+                reasons.append({
+                    "type": "Rapid Disbursements",
+                    "evidence": f"Duration between first and last payment = {int(pay_dur)} days",
+                    "calculation": f"{int(pay_dur)} < 7 days threshold",
+                    "explanation": f"Multiple disbursements executed within a very short timeframe ({int(pay_dur)} days).",
+                    "score": 5
+                })
             
             comps['payment'] = min(pay_score, 15)
             score += comps['payment']
@@ -172,10 +208,22 @@ class RiskEngine:
             delay_score = 0
             if pd.notna(row.get('sanction_delay_days')) and row['sanction_delay_days'] > 180:
                 delay_score += 5
-                reasons.append(f"Long delay ({int(row['sanction_delay_days'])} days) between recommendation and sanctioning.")
+                reasons.append({
+                    "type": "Sanctioning Delay",
+                    "evidence": f"Recommendation to Sanction = {int(row['sanction_delay_days'])} days",
+                    "calculation": f"{int(row['sanction_delay_days'])} > 180 days",
+                    "explanation": f"Long delay ({int(row['sanction_delay_days'])} days) between recommendation and sanctioning.",
+                    "score": 5
+                })
             if pd.notna(row.get('completion_duration_days')) and row['completion_duration_days'] > 365:
                 delay_score += 5
-                reasons.append(f"Execution took longer than 1 year ({int(row['completion_duration_days'])} days).")
+                reasons.append({
+                    "type": "Execution Delay",
+                    "evidence": f"Sanction to Completion = {int(row['completion_duration_days'])} days",
+                    "calculation": f"{int(row['completion_duration_days'])} > 365 days",
+                    "explanation": f"Execution took longer than 1 year ({int(row['completion_duration_days'])} days).",
+                    "score": 5
+                })
                 
             comps['delay'] = min(delay_score, 10)
             score += comps['delay']
@@ -184,10 +232,15 @@ class RiskEngine:
             if row.get('similar_work_detected', False):
                 comps['similarity'] = 10
                 score += comps['similarity']
-                reasons.append(f"Potentially similar work detected based on NLP description analysis (Match ID: {row.get('similar_work_id')}).")
+                reasons.append({
+                    "type": "Similar Work Detected",
+                    "evidence": f"Matched Work ID = {row.get('similar_work_id')}",
+                    "calculation": "TF-IDF Cosine Similarity > 0.85 in same district",
+                    "explanation": "Potentially similar work detected based on NLP description analysis.",
+                    "score": 10
+                })
                 
             # --- Final Assembly ---
-            # Ensure score is capped at 100
             score = min(score, 100)
             
             if score >= 60:
@@ -202,13 +255,16 @@ class RiskEngine:
             risk_components.append(json.dumps(comps))
             
             if not reasons:
-                reasons.append("No unusual patterns detected.")
-            explanations.append(" | ".join(reasons))
+                explanations_json.append("[]")
+                self.df.at[row.name, 'risk_evidence_explanation'] = "No unusual patterns detected."
+            else:
+                explanations_json.append(json.dumps(reasons))
+                self.df.at[row.name, 'risk_evidence_explanation'] = " | ".join([r["type"] for r in reasons])
             
         self.df['prototype_risk_score'] = risk_scores
         self.df['risk_level'] = risk_levels
         self.df['risk_components'] = risk_components
-        self.df['risk_evidence_explanation'] = explanations
+        self.df['structured_reasons'] = explanations_json
         
         return self.df
         

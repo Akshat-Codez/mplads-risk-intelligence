@@ -189,7 +189,17 @@ export const Dashboard: React.FC = () => {
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                           {/* Left Column: Reasons & Evidence */}
                           <div className="space-y-4">
-                            <h5 className="font-bold text-slate-800 border-b pb-1">WHY WAS THIS FLAGGED?</h5>
+                            <div className="bg-indigo-50 border border-indigo-100 p-4 rounded-lg space-y-1 shadow-sm">
+                               <div className="flex items-center space-x-1.5 mb-1.5">
+                                 <span className="text-indigo-600 font-extrabold text-xs tracking-wider">AI SCORE JUSTIFICATION</span>
+                                 <span className="bg-indigo-200 text-indigo-800 text-[9px] px-1.5 py-0.5 rounded uppercase font-bold">Auto-Generated</span>
+                               </div>
+                               <p className="text-indigo-900 text-sm font-medium leading-relaxed">
+                                 {w.ai_justification_summary}
+                               </p>
+                            </div>
+
+                            <h5 className="font-bold text-slate-800 border-b pb-1 mt-4">WHY WAS THIS FLAGGED?</h5>
                             {w.structured_reasons_parsed?.map((reason: any, idx: number) => (
                               <div key={idx} className="bg-white p-3 rounded border border-slate-200 space-y-2 shadow-sm">
                                 <div className="flex justify-between items-center">

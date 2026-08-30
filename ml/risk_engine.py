@@ -120,6 +120,7 @@ class RiskEngine:
         risk_levels = []
         explanations_json = []
         risk_components = []
+        ai_summaries = []
 
         for _, row in self.df.iterrows():
             score = 0
@@ -257,14 +258,26 @@ class RiskEngine:
             if not reasons:
                 explanations_json.append("[]")
                 self.df.at[row.name, 'risk_evidence_explanation'] = "No unusual patterns detected."
+                summary = "The AI engine evaluated this project and assigned a LOW risk score. No unusual financial, temporal, or structural patterns were detected in the available data."
             else:
                 explanations_json.append(json.dumps(reasons))
                 self.df.at[row.name, 'risk_evidence_explanation'] = " | ".join([r["type"] for r in reasons])
+                
+                # Generate natural language AI justification
+                summary = f"The AI engine assigned a {level} risk score of {score}/100. "
+                summary += f"The justification for this score is based on {len(reasons)} detected anomalies: "
+                descriptions = [r['explanation'].rstrip('.') for r in reasons]
+                if len(descriptions) == 1:
+                    summary += descriptions[0] + "."
+                else:
+                    summary += "; ".join(descriptions[:-1]) + "; and " + descriptions[-1] + "."
+            ai_summaries.append(summary)
             
         self.df['prototype_risk_score'] = risk_scores
         self.df['risk_level'] = risk_levels
         self.df['risk_components'] = risk_components
         self.df['structured_reasons'] = explanations_json
+        self.df['ai_justification_summary'] = ai_summaries
         
         return self.df
         

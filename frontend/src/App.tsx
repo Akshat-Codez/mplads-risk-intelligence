@@ -78,6 +78,7 @@ export const App: React.FC = () => {
           {/* Protected Application Routes */}
           <Route path="/app/*" element={<ProtectedLayout />} />
           <Route path="/dashboard/*" element={<ProtectedLayout />} />
+          <Route path="/*" element={<ProtectedLayout />} />
         </Routes>
       </Router>
     </AuthProvider>

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Search, Filter, Download, RotateCcw, Building2, MapPin, AlertTriangle } from '../components/common/Icons';
 import { MOCK_PROJECTS } from '../data/mockData';
 import { useAuth } from '../context/AuthContext';
+import api from '../services/api';
 
 export const Projects: React.FC = () => {
   const navigate = useNavigate();
@@ -117,9 +118,9 @@ export const Projects: React.FC = () => {
   };
 
   return (
-    <div className="p-6 space-y-6 font-sans bg-slate-50 min-h-screen">
-      {/* Top Header */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+    <div className="p-6 space-y-6 bg-slate-50 min-h-screen font-sans text-xs">
+      {/* Header */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-slate-200 pb-4">
         <div>
           <div className="flex items-center space-x-2">
             <h1 className="text-2xl font-black text-slate-900 font-serif">MPLADS Projects Explorer</h1>
@@ -143,6 +144,7 @@ export const Projects: React.FC = () => {
         </button>
       </div>
 
+      {/* Filters Bar */}
       {/* Filters Bar */}
       <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4">
         <div className="flex items-center justify-between border-b border-slate-100 pb-3">
@@ -230,7 +232,6 @@ export const Projects: React.FC = () => {
           Showing <strong className="text-blue-600 font-bold">{filteredProjects.length}</strong> Works for {role === 'DISTRICT' ? `District ${user?.district}` : role === 'STATE' ? `State ${user?.state}` : 'Nationwide'} Scope
         </div>
       </div>
-
       {/* Projects Table */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
         <table className="w-full text-left text-xs">
@@ -298,6 +299,27 @@ export const Projects: React.FC = () => {
           </tbody>
         </table>
       </div>
+
+      {/* Pagination Controls */}
+      {totalPages > 1 && (
+        <div className="flex justify-center items-center space-x-2 pt-4">
+          <button 
+            disabled={page === 1}
+            onClick={() => setPage(page - 1)}
+            className="px-3 py-1 bg-white border border-slate-300 rounded font-bold text-slate-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Previous
+          </button>
+          <span className="text-slate-600 font-bold">Page {page} of {totalPages}</span>
+          <button 
+            disabled={page === totalPages}
+            onClick={() => setPage(page + 1)}
+            className="px-3 py-1 bg-white border border-slate-300 rounded font-bold text-slate-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Next
+          </button>
+        </div>
+      )}
     </div>
   );
 };

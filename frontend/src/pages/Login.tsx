@@ -13,41 +13,101 @@ export const Login: React.FC = () => {
   const [password, setPassword] = useState('••••••••••••');
   const [captchaInput, setCaptchaInput] = useState('');
   const [selectedRole, setSelectedRole] = useState<Role>(initialRole);
+  const [selectedState, setSelectedState] = useState('Karnataka');
+  const [selectedDistrict, setSelectedDistrict] = useState('BENGALURU URBAN');
+  const [locations, setLocations] = useState<Record<string, string[]>>({
+    'Karnataka': ['BENGALURU URBAN', 'BENGALURU RURAL', 'CHITRADURGA', 'DHARWAD', 'HASSAN', 'MANDYA', 'SHIVAMOGGA', 'TUMAKURU', 'UTTARA KANNADA'],
+    'Uttar Pradesh': ['KHERI', 'UNNAO'],
+    'Bihar': ['MUNGER', 'NAWADA', 'PATNA', 'PURBI CHAMPARAN'],
+    'Kerala': ['ALAPPUZHA', 'IDUKKI', 'KANNUR', 'KASARAGOD', 'KOLLAM', 'KOTTAYAM', 'KOZHIKODE', 'MALAPPURAM', 'PALAKKAD', 'THIRUVANANTHAPURAM', 'THRISSUR', 'WAYANAD'],
+    'Maharashtra': ['NAGPUR'],
+    'Nagaland': ['DIMAPUR', 'KOHIMA', 'MOKOKCHUNG', 'MON', 'PEREN', 'PHEK', 'TUENSANG', 'WOKHA']
+  });
+  
+  const [error, setError] = useState<string | null>(null);
   
   const { login } = useAuth();
   const navigate = useNavigate();
 
-  const handleLogin = (e: React.FormEvent) => {
-    e.preventDefault();
-    login(username, selectedRole);
-    navigate('/app');
+  React.useEffect(() => {
+    // Attempt fetching dynamic locations from backend
+    fetch('http://localhost:5000/api/auth/locations')
+      .then(res => res.json())
+      .then(data => {
+        if (data.stateDistricts && Object.keys(data.stateDistricts).length > 0) {
+          setLocations(data.stateDistricts);
+        }
+      })
+      .catch(() => {
+        // Use default fallback
+      });
+  }, []);
+
+  const handleStateChange = (st: string) => {
+    setSelectedState(st);
+    const districts = locations[st] || [];
+    if (districts.length > 0) {
+      setSelectedDistrict(districts[0]);
+    }
   };
 
-  const handleDemoMode = (demoRole: Role) => {
-    login(`DEMO-${demoRole}-2026`, demoRole);
-    navigate('/app');
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    try {
+      await login(
+        username,
+        selectedRole,
+        selectedRole === 'MINISTRY' || selectedRole === 'MINISTER' ? 'All India' : selectedState,
+        selectedRole === 'DISTRICT' ? selectedDistrict : 'All Districts'
+      );
+      navigate('/app');
+    } catch (err: any) {
+      setError(err.message || 'Login failed. Please check credentials.');
+    }
+  };
+
+  const handleDemoMode = async (demoRole: Role, demoState = 'Karnataka', demoDistrict = 'BENGALURU URBAN') => {
+    setError(null);
+    try {
+      await login(
+        `DEMO-${demoRole}-2026`,
+        demoRole,
+        demoRole === 'MINISTRY' || demoRole === 'MINISTER' ? 'All India' : demoState,
+        demoRole === 'DISTRICT' ? demoDistrict : 'All Districts'
+      );
+      navigate('/app');
+    } catch (err: any) {
+      setError('Demo login failed. Make sure server is running.');
+    }
   };
 
   return (
     <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4 font-sans">
       <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 max-w-5xl w-full overflow-hidden grid grid-cols-1 md:grid-cols-2">
         
-        {/* Left Side: Official Parliament Image Banner */}
-        <div className="relative bg-slate-900 text-white flex flex-col justify-between p-8 overflow-hidden min-h-[500px]">
-          <div className="absolute inset-0 bg-cover bg-center opacity-40" style={{ backgroundImage: "url('https://images.unsplash.com/photo-1541888946425-d0fbb186a5b7?w=800')" }} />
-          <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-900/60 to-transparent" />
+        {/* Left Side: Official Parliament / Leadership Image Banner */}
+        <div className="relative bg-slate-950 text-white flex flex-col justify-between p-8 overflow-hidden min-h-[500px]">
+          {/* Full Space Portrait Image */}
+          <img
+            src="https://tse4.mm.bing.net/th/id/OIP.evmb_tz_sypCxmQYEqEZCAAAAA?r=0&w=400&h=400&rs=1&pid=ImgDetMain&o=7&rm=3"
+            alt="Official Government Portal"
+            className="absolute inset-0 w-full h-full object-cover object-top"
+          />
+          {/* Subtle gradient overlay to ensure top badge and bottom typography remain crisp */}
+          <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/30 to-slate-950/70" />
 
           {/* Top Left Tag */}
           <div className="relative z-10">
-            <span className="bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[10px] font-extrabold px-3 py-1 rounded-full uppercase tracking-wider">
+            <span className="bg-amber-500/20 backdrop-blur-md text-amber-300 border border-amber-500/40 text-[10px] font-extrabold px-3 py-1 rounded-full uppercase tracking-wider shadow-md">
               🇮🇳 Official Government Portal
             </span>
           </div>
 
           {/* Bottom Left Title */}
-          <div className="relative z-10 space-y-2">
-            <h1 className="text-4xl font-black font-serif text-white tracking-tight">eSAKSHI</h1>
-            <p className="text-xs text-slate-300 font-medium leading-relaxed">
+          <div className="relative z-10 space-y-2 pt-32">
+            <h1 className="text-4xl font-black font-serif text-white tracking-tight drop-shadow-md">eSAKSHI</h1>
+            <p className="text-xs text-slate-200 font-medium leading-relaxed drop-shadow">
               SANsad sadasya sthaniya KSHetra vikas yojana <br />
               <span className="text-amber-400 font-semibold">(MPLADS Infrastructure Reporting & Analytics)</span>
             </p>
@@ -68,6 +128,12 @@ export const Login: React.FC = () => {
             <h2 className="text-2xl font-black text-slate-900 font-serif pt-2 border-t border-slate-200">Log In</h2>
           </div>
 
+          {error && (
+            <div className="bg-red-50 text-red-600 border border-red-200 text-xs px-3 py-2 rounded-lg font-bold text-center">
+              ⚠️ {error}
+            </div>
+          )}
+
           {/* Form */}
           <form onSubmit={handleLogin} className="space-y-4 text-xs">
             <div>
@@ -77,12 +143,48 @@ export const Login: React.FC = () => {
                 onChange={(e) => setSelectedRole(e.target.value as Role)}
                 className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 font-bold text-slate-800 focus:ring-2 focus:ring-blue-600"
               >
-                <option value="MINISTER">👔 1. Hon'ble Minister (Executive View)</option>
+                <option value="MINISTER">👔 1. Hon'ble Minister (Executive National View)</option>
                 <option value="MINISTRY">🏛️ 2. Ministry MoSPI (National Operations)</option>
                 <option value="STATE">🏢 3. State Nodal Authority (State Review)</option>
-                <option value="DISTRICT">📍 4. District Collector DC (Field Audits)</option>
+                <option value="DISTRICT">📍 4. District Collector DC (District Field Audits)</option>
               </select>
             </div>
+
+            {/* Dynamic State Selection for State & District Authority */}
+            {(selectedRole === 'STATE' || selectedRole === 'DISTRICT') && (
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">
+                  Select Authorized State <span className="text-red-500">*</span>
+                </label>
+                <select
+                  value={selectedState}
+                  onChange={(e) => handleStateChange(e.target.value)}
+                  className="w-full bg-emerald-50 border border-emerald-300 text-emerald-950 font-bold rounded-lg p-2.5 focus:ring-2 focus:ring-emerald-600"
+                >
+                  {Object.keys(locations).map(st => (
+                    <option key={st} value={st}>{st}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {/* Dynamic District Selection for District Authority */}
+            {selectedRole === 'DISTRICT' && (
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">
+                  Select Authorized District ({selectedState}) <span className="text-red-500">*</span>
+                </label>
+                <select
+                  value={selectedDistrict}
+                  onChange={(e) => setSelectedDistrict(e.target.value)}
+                  className="w-full bg-purple-50 border border-purple-300 text-purple-950 font-bold rounded-lg p-2.5 focus:ring-2 focus:ring-purple-600"
+                >
+                  {(locations[selectedState] || []).map(dt => (
+                    <option key={dt} value={dt}>{dt}</option>
+                  ))}
+                </select>
+              </div>
+            )}
 
             <div>
               <div className="relative">
@@ -135,7 +237,7 @@ export const Login: React.FC = () => {
               type="submit"
               className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg shadow transition text-sm cursor-pointer"
             >
-              Login
+              Login as {selectedRole === 'DISTRICT' ? `${selectedDistrict} DC` : selectedRole === 'STATE' ? `${selectedState} Nodal` : 'National Authority'}
             </button>
 
             <p className="text-[10px] text-red-500 text-center font-medium">
@@ -147,17 +249,17 @@ export const Login: React.FC = () => {
           <div className="pt-3 border-t border-slate-200 space-y-2 text-center">
             <span className="text-[10px] text-slate-400 font-bold uppercase">Hackathon Quick Demo Logins:</span>
             <div className="grid grid-cols-2 gap-2 text-[11px]">
-              <button onClick={() => handleDemoMode('MINISTER')} className="p-1.5 bg-amber-50 hover:bg-amber-100 text-amber-900 font-bold rounded border border-amber-200">
-                👔 Minister View
-              </button>
               <button onClick={() => handleDemoMode('MINISTRY')} className="p-1.5 bg-blue-50 hover:bg-blue-100 text-blue-900 font-bold rounded border border-blue-200">
-                🏛️ Ministry MoSPI
+                🏛️ MoSPI National (All India)
               </button>
-              <button onClick={() => handleDemoMode('STATE')} className="p-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-900 font-bold rounded border border-emerald-200">
-                🏢 State Nodal
+              <button onClick={() => handleDemoMode('STATE', 'Karnataka')} className="p-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-900 font-bold rounded border border-emerald-200">
+                🏢 State Nodal (Karnataka)
               </button>
-              <button onClick={() => handleDemoMode('DISTRICT')} className="p-1.5 bg-purple-50 hover:bg-purple-100 text-purple-800 font-bold rounded border border-purple-200">
-                📍 District DC
+              <button onClick={() => handleDemoMode('DISTRICT', 'Bihar', 'PURBI CHAMPARAN')} className="p-1.5 bg-purple-50 hover:bg-purple-100 text-purple-900 font-bold rounded border border-purple-200">
+                📍 DC Purbi Champaran
+              </button>
+              <button onClick={() => handleDemoMode('STATE', 'Uttar Pradesh')} className="p-1.5 bg-amber-50 hover:bg-amber-100 text-amber-900 font-bold rounded border border-amber-200">
+                🏢 State Nodal (Uttar Pradesh)
               </button>
             </div>
           </div>

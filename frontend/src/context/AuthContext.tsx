@@ -1,77 +1,122 @@
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
 import { Role, User } from '../types';
+import api from '../services/api';
 
 interface AuthContextType {
   user: User | null;
   role: Role;
-  login: (emailOrAuthId: string, role: Role) => void;
-  register: (name: string, email: string, authorityId: string, role: Role, state?: string, district?: string) => void;
+  login: (emailOrAuthId: string, role: Role, state?: string, district?: string) => Promise<void>;
+  register: (name: string, email: string, authorityId: string, role: Role, state?: string, district?: string) => Promise<void>;
+  setScope: (role: Role, state?: string, district?: string) => Promise<void>;
   logout: () => void;
   setRole: (role: Role) => void;
+  loading: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [role, setRoleState] = useState<Role>('MINISTRY');
-  const [user, setUser] = useState<User | null>({
-    id: 'u1',
-    authorityId: 'GOV-MOSPI-001',
-    name: 'National MoSPI Admin',
-    email: 'admin.mospi@gov.in',
-    role: 'MINISTRY',
-    state: 'All India',
-    district: 'All Districts'
-  });
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
 
-  const getRoleName = (r: Role) => {
-    switch (r) {
-      case 'MINISTER': return 'Honble Minister of State';
-      case 'MINISTRY': return 'National MoSPI Admin';
-      case 'STATE': return 'State Nodal Officer (UP)';
-      case 'DISTRICT': return 'District Collector (Varanasi)';
+  // Validate session on load
+  useEffect(() => {
+    const initAuth = async () => {
+      const token = localStorage.getItem('token');
+      if (token) {
+        try {
+          const res = await api.get('/auth/me');
+          if (res.data && res.data.user) {
+            setUser(res.data.user);
+            setRoleState(res.data.user.role as Role);
+          } else {
+            localStorage.removeItem('token');
+          }
+        } catch (err) {
+          console.error('Session validation failed:', err);
+          localStorage.removeItem('token');
+        }
+      }
+      setLoading(false);
+    };
+    initAuth();
+  }, []);
+
+  const login = async (emailOrAuthId: string, selectedRole: Role, state?: string, district?: string) => {
+    try {
+      const res = await api.post('/auth/login', {
+        authorityId: emailOrAuthId,
+        password: 'password', // Demo password
+        role: selectedRole,
+        state,
+        district
+      });
+      
+      const { token, user: loggedUser } = res.data;
+      localStorage.setItem('token', token);
+      setUser(loggedUser);
+      setRoleState(loggedUser.role as Role);
+    } catch (err: any) {
+      console.error('Login request failed:', err);
+      throw new Error(err.response?.data?.error || 'Invalid credentials');
     }
   };
 
-  const login = (emailOrAuthId: string, selectedRole: Role) => {
-    setRoleState(selectedRole);
-    setUser({
-      id: 'u-' + Date.now(),
-      authorityId: emailOrAuthId.includes('@') ? 'GOV-AUTH-' + Math.floor(Math.random() * 1000) : emailOrAuthId,
-      name: getRoleName(selectedRole),
-      email: emailOrAuthId.includes('@') ? emailOrAuthId : `${selectedRole.toLowerCase()}@gov.in`,
-      role: selectedRole,
-      state: selectedRole === 'MINISTER' || selectedRole === 'MINISTRY' ? 'All India' : 'Uttar Pradesh',
-      district: selectedRole === 'DISTRICT' ? 'Varanasi' : 'All Districts'
-    });
+  const setScope = async (targetRole: Role, state?: string, district?: string) => {
+    try {
+      const res = await api.post('/auth/set-scope', {
+        role: targetRole,
+        state,
+        district
+      });
+
+      const { token, user: updatedUser } = res.data;
+      localStorage.setItem('token', token);
+      setUser(updatedUser);
+      setRoleState(updatedUser.role as Role);
+    } catch (err: any) {
+      console.error('Failed to update authority scope:', err);
+      throw new Error(err.response?.data?.error || 'Failed to update authority scope');
+    }
   };
 
-  const register = (name: string, email: string, authorityId: string, selectedRole: Role, state?: string, district?: string) => {
-    setRoleState(selectedRole);
-    setUser({
-      id: 'u-' + Date.now(),
-      authorityId,
-      name,
-      email,
-      role: selectedRole,
-      state: state || 'All India',
-      district: district || 'All Districts'
-    });
+  const register = async (name: string, email: string, authorityId: string, selectedRole: Role, state?: string, district?: string) => {
+    try {
+      const res = await api.post('/auth/register', {
+        name,
+        email,
+        authorityId,
+        password: 'password', // Default password for SIH
+        role: selectedRole,
+        state,
+        district
+      });
+
+      const { token, user: registeredUser } = res.data;
+      localStorage.setItem('token', token);
+      setUser(registeredUser);
+      setRoleState(registeredUser.role as Role);
+    } catch (err: any) {
+      console.error('Registration failed:', err);
+      throw new Error(err.response?.data?.error || 'Registration failed');
+    }
   };
 
   const logout = () => {
+    localStorage.removeItem('token');
     setUser(null);
   };
 
   const setRole = (newRole: Role) => {
     setRoleState(newRole);
     if (user) {
-      setUser({ ...user, role: newRole, name: getRoleName(newRole) });
+      setUser({ ...user, role: newRole });
     }
   };
 
   return (
-    <AuthContext.Provider value={{ user, role, login, register, logout, setRole }}>
+    <AuthContext.Provider value={{ user, role, login, register, setScope, logout, setRole, loading }}>
       {children}
     </AuthContext.Provider>
   );

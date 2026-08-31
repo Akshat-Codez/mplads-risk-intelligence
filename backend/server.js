@@ -3,6 +3,19 @@ import cors from 'cors';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { PrismaClient } from '@prisma/client';
+import dotenv from 'dotenv';
+
+// Import Routes
+import projectRoutes from './routes/projects.js';
+import dashboardRoutes from './routes/dashboard.js';
+import procurementRoutes from './routes/procurement.js';
+import contractorRoutes from './routes/contractors.js';
+import aiSummaryRoutes from './routes/aiSummary.js';
+import feedbackRoutes from './routes/feedback.js';
+import modelRoutes from './routes/models.js';
+import authMiddleware from './middleware/auth.js';
+
+dotenv.config();
 
 const app = express();
 const prisma = new PrismaClient();
@@ -11,6 +24,17 @@ const JWT_SECRET = process.env.JWT_SECRET || 'nirman-sih-2026-secret-key-gov-mos
 
 app.use(cors());
 app.use(express.json());
+
+// Mount Routes
+app.use('/api/projects', projectRoutes);
+app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/procurement', procurementRoutes);
+app.use('/api/contractors', contractorRoutes);
+app.use('/api/ai', aiSummaryRoutes);
+app.use('/api/feedback', feedbackRoutes);
+app.use('/api/models', modelRoutes);
+app.use('/api', feedbackRoutes); // for /api/projects/:projectId/feedback
+
 
 // Health Check
 app.get('/api/health', (req, res) => {
@@ -86,13 +110,111 @@ app.post('/api/auth/register', async (req, res) => {
   }
 });
 
+// GET /api/auth/locations - Available States and Districts
+app.get('/api/auth/locations', async (req, res) => {
+  try {
+    const records = await prisma.project.findMany({
+      select: { state: true, district: true },
+      distinct: ['state', 'district'],
+      orderBy: [{ state: 'asc' }, { district: 'asc' }]
+    });
+
+    const stateDistricts = {};
+    for (const r of records) {
+      if (!r.state || !r.state.trim()) continue;
+      const st = r.state.trim();
+      const dt = r.district ? r.district.trim() : null;
+      if (!stateDistricts[st]) {
+        stateDistricts[st] = [];
+      }
+      if (dt && !stateDistricts[st].includes(dt)) {
+        stateDistricts[st].push(dt);
+      }
+    }
+
+    for (const st of Object.keys(stateDistricts)) {
+      stateDistricts[st].sort();
+    }
+
+    res.json({
+      states: Object.keys(stateDistricts).sort(),
+      stateDistricts
+    });
+  } catch (err) {
+    console.error('Error fetching locations:', err);
+    res.status(500).json({ error: 'Failed to fetch location hierarchy' });
+  }
+});
+
+// SET / UPDATE AUTHORITY SCOPE Endpoint
+app.post('/api/auth/set-scope', authMiddleware, async (req, res) => {
+  try {
+    const { role, state, district } = req.body;
+    const targetRole = role ? role.toUpperCase() : req.user.role;
+    
+    let targetState = state || req.user.state || 'All India';
+    let targetDistrict = district || req.user.district || 'All Districts';
+
+    if (['MINISTRY', 'ADMIN', 'SUPER_ADMIN', 'MINISTER'].includes(targetRole)) {
+      targetState = 'All India';
+      targetDistrict = 'All Districts';
+    } else if (targetRole === 'STATE') {
+      targetDistrict = 'All Districts';
+    }
+
+    const updatedUser = await prisma.user.update({
+      where: { id: req.user.id },
+      data: {
+        role: targetRole,
+        state: targetState,
+        district: targetDistrict
+      }
+    });
+
+    const token = jwt.sign(
+      { userId: updatedUser.id, authorityId: updatedUser.authorityId, role: updatedUser.role },
+      JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+
+    res.json({
+      message: 'Authority scope updated successfully',
+      token,
+      user: {
+        id: updatedUser.id,
+        authorityId: updatedUser.authorityId,
+        name: updatedUser.name,
+        email: updatedUser.email,
+        role: updatedUser.role,
+        state: updatedUser.state,
+        district: updatedUser.district
+      }
+    });
+  } catch (err) {
+    console.error('Error updating authority scope:', err);
+    res.status(500).json({ error: 'Failed to update authority scope' });
+  }
+});
+
 // LOGIN Endpoint
 app.post('/api/auth/login', async (req, res) => {
   try {
-    const { authorityId, password, role } = req.body;
+    const { authorityId, password, role, state, district } = req.body;
 
     if (!authorityId || !password) {
       return res.status(400).json({ error: 'Please provide Authority Code/Email and Password' });
+    }
+
+    const assignedRole = role ? role.toUpperCase() : 'MINISTRY';
+    let assignedState = state || 'All India';
+    let assignedDistrict = district || 'All Districts';
+
+    if (assignedRole === 'STATE') {
+      assignedState = state || 'Uttar Pradesh';
+      assignedDistrict = 'All Districts';
+    } else if (assignedRole === 'DISTRICT') {
+      assignedState = state || 'Uttar Pradesh';
+      assignedDistrict = district || 'Varanasi';
     }
 
     let user = null;
@@ -106,14 +228,14 @@ app.post('/api/auth/login', async (req, res) => {
         user = await prisma.user.create({
           data: {
             authorityId: authorityId.toUpperCase(),
-            name: role === 'MINISTER' ? 'Honble Minister of State' : 
-                  role === 'STATE' ? 'State Nodal Officer (UP)' :
-                  role === 'DISTRICT' ? 'District Collector (Varanasi)' : 'National MoSPI Admin',
-            email: `${role ? role.toLowerCase() : 'user'}@gov.in`,
+            name: assignedRole === 'MINISTER' ? 'Honble Minister of State' : 
+                  assignedRole === 'STATE' ? `State Nodal Officer (${assignedState})` :
+                  assignedRole === 'DISTRICT' ? `District Collector (${assignedDistrict})` : 'National MoSPI Admin',
+            email: `${authorityId.toLowerCase().replace(/[^a-z0-9]/g, '')}@gov.in`,
             passwordHash,
-            role: role ? role.toUpperCase() : 'MINISTRY',
-            state: role === 'STATE' || role === 'DISTRICT' ? 'Uttar Pradesh' : 'All India',
-            district: role === 'DISTRICT' ? 'Varanasi' : 'All Districts'
+            role: assignedRole,
+            state: assignedState,
+            district: assignedDistrict
           }
         });
       } else {
@@ -121,20 +243,29 @@ app.post('/api/auth/login', async (req, res) => {
         if (!isMatch && password !== '••••••••••••') {
           return res.status(401).json({ error: 'Invalid Authority Credentials' });
         }
+        if (role || state || district) {
+          user = await prisma.user.update({
+            where: { id: user.id },
+            data: {
+              role: assignedRole,
+              state: assignedState,
+              district: assignedDistrict
+            }
+          });
+        }
       }
     } catch (dbErr) {
       console.warn('⚠️ DB Disconnected - using login fallback:', dbErr.message);
-      const selRole = role ? role.toUpperCase() : 'MINISTRY';
       user = {
         id: 'u-' + Date.now(),
         authorityId: authorityId.toUpperCase(),
-        name: selRole === 'MINISTER' ? 'Honble Minister of State' : 
-              selRole === 'STATE' ? 'State Nodal Officer (UP)' :
-              selRole === 'DISTRICT' ? 'District Collector (Varanasi)' : 'National MoSPI Admin',
-        email: `${selRole.toLowerCase()}@gov.in`,
-        role: selRole,
-        state: selRole === 'STATE' || selRole === 'DISTRICT' ? 'Uttar Pradesh' : 'All India',
-        district: selRole === 'DISTRICT' ? 'Varanasi' : 'All Districts'
+        name: assignedRole === 'MINISTER' ? 'Honble Minister of State' : 
+              assignedRole === 'STATE' ? `State Nodal Officer (${assignedState})` :
+              assignedRole === 'DISTRICT' ? `District Collector (${assignedDistrict})` : 'National MoSPI Admin',
+        email: `${assignedRole.toLowerCase()}@gov.in`,
+        role: assignedRole,
+        state: assignedState,
+        district: assignedDistrict
       };
     }
 
@@ -205,6 +336,60 @@ app.get('/api/auth/me', async (req, res) => {
     });
   } catch (err) {
     res.status(401).json({ error: 'Invalid or expired token' });
+  }
+});
+
+// GET /api/audit-logs
+app.get('/api/audit-logs', authMiddleware, async (req, res) => {
+  try {
+    const logs = await prisma.auditLog.findMany({
+      include: {
+        user: {
+          select: {
+            name: true,
+            role: true
+          }
+        },
+        project: {
+          select: {
+            projectId: true
+          }
+        }
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 100
+    });
+    res.json(logs);
+  } catch (err) {
+    console.error('Audit logs fetch error:', err);
+    res.status(500).json({ error: 'Failed to retrieve audit logs' });
+  }
+});
+
+// GET /api/cases
+app.get('/api/cases', authMiddleware, async (req, res) => {
+  try {
+    const cases = await prisma.case.findMany({
+      include: {
+        project: true,
+        actions: {
+          include: {
+            user: {
+              select: {
+                name: true,
+                role: true
+              }
+            }
+          },
+          orderBy: { createdAt: 'desc' }
+        }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+    res.json(cases);
+  } catch (err) {
+    console.error('Cases fetch error:', err);
+    res.status(500).json({ error: 'Failed to retrieve cases' });
   }
 });
 

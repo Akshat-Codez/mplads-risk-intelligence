@@ -13,6 +13,7 @@ export const ProjectDetail: React.FC = () => {
   const [investigationNotes, setInvestigationNotes] = useState("");
 
   const [procurementDoc, setProcurementDoc] = useState<any>(null);
+  const [aiProjectSummary, setAiProjectSummary] = useState<any>(null);
   const [uploading, setUploading] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
 
@@ -29,9 +30,13 @@ export const ProjectDetail: React.FC = () => {
         try {
           const procRes = await api.get(`/procurement/${encodedId}`);
           setProcurementDoc(procRes.data);
-        } catch (procErr) {
-          console.error("Error fetching procurement:", procErr);
-        }
+        } catch (procErr) {}
+
+        // Fetch AI Project Summary
+        try {
+          const aiRes = await api.get(`/ai/project/${encodedId}/summary`);
+          setAiProjectSummary(aiRes.data);
+        } catch (aiErr) {}
       } catch (err) {
         console.error(err);
       } finally {
@@ -164,6 +169,28 @@ export const ProjectDetail: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* AI Officer Project Intelligence Briefing Card */}
+      {aiProjectSummary && (
+        <div className="bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 rounded-2xl p-6 text-white shadow-xl border border-indigo-500/20 space-y-4">
+          <div className="flex justify-between items-center border-b border-indigo-800/40 pb-3">
+            <div className="flex items-center space-x-2.5">
+              <span className="p-1.5 bg-indigo-600/40 rounded-lg border border-indigo-400/30 text-indigo-300">✨</span>
+              <div>
+                <h3 className="text-base font-bold text-white">AI Officer Risk Intelligence Briefing</h3>
+                <p className="text-[11px] text-indigo-200/80">Cross-verified structured intelligence for administrative review</p>
+              </div>
+            </div>
+            <span className="text-[10px] bg-indigo-500/30 text-indigo-300 border border-indigo-400/30 px-2.5 py-0.5 rounded-full font-bold uppercase">
+              Confidence: {aiProjectSummary.structuredData?.confidence}%
+            </span>
+          </div>
+
+          <div className="bg-black/30 border border-indigo-500/20 rounded-xl p-5 text-xs text-indigo-100/90 leading-relaxed font-sans whitespace-pre-wrap">
+            {aiProjectSummary.summaryMarkdown}
+          </div>
+        </div>
+      )}
 
       {/* Associated Contractor & Compatibility Card */}
       {project.vendorName && (

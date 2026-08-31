@@ -10,6 +10,7 @@ import projectRoutes from './routes/projects.js';
 import dashboardRoutes from './routes/dashboard.js';
 import procurementRoutes from './routes/procurement.js';
 import contractorRoutes from './routes/contractors.js';
+import aiSummaryRoutes from './routes/aiSummary.js';
 import authMiddleware from './middleware/auth.js';
 
 dotenv.config();
@@ -27,6 +28,7 @@ app.use('/api/projects', projectRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/procurement', procurementRoutes);
 app.use('/api/contractors', contractorRoutes);
+app.use('/api/ai', aiSummaryRoutes);
 
 
 // Health Check

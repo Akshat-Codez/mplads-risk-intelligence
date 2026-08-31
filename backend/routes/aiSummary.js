@@ -2,6 +2,7 @@ import express from 'express';
 import { PrismaClient } from '@prisma/client';
 import authMiddleware from '../middleware/auth.js';
 import { generateDashboardSummary, generateProjectSummary } from '../services/aiSummaryService.js';
+import { getAuthorityScopeFilter, isProjectInScope } from '../utils/scopeFilter.js';
 
 const router = express.Router();
 const prisma = new PrismaClient();
@@ -22,14 +23,17 @@ function normalizeName(name) {
  */
 router.get('/summary', authMiddleware, async (req, res) => {
   try {
-    const totalProjects = await prisma.project.count();
-    const highRiskCount = await prisma.project.count({ where: { riskLevel: 'HIGH' } });
-    const mediumRiskCount = await prisma.project.count({ where: { riskLevel: 'MEDIUM' } });
-    const lowRiskCount = await prisma.project.count({ where: { riskLevel: 'LOW' } });
-    const insufficientDataCount = await prisma.project.count({ where: { riskLevel: 'INSUFFICIENT DATA' } });
+    const scopeFilter = getAuthorityScopeFilter(req.user);
 
-    // Fetch projects to compute multi-signal and signal frequencies
+    const totalProjects = await prisma.project.count({ where: scopeFilter });
+    const highRiskCount = await prisma.project.count({ where: { ...scopeFilter, riskLevel: 'HIGH' } });
+    const mediumRiskCount = await prisma.project.count({ where: { ...scopeFilter, riskLevel: 'MEDIUM' } });
+    const lowRiskCount = await prisma.project.count({ where: { ...scopeFilter, riskLevel: 'LOW' } });
+    const insufficientDataCount = await prisma.project.count({ where: { ...scopeFilter, riskLevel: 'INSUFFICIENT DATA' } });
+
+    // Fetch projects within scope to compute multi-signal and signal frequencies
     const projects = await prisma.project.findMany({
+      where: scopeFilter,
       select: {
         id: true,
         projectId: true,
@@ -125,9 +129,10 @@ router.get('/summary', authMiddleware, async (req, res) => {
       };
     }).sort((a, b) => b.highRiskCount - a.highRiskCount || b.avgRiskScore - a.avgRiskScore);
 
-    // Fetch top priority projects
+    // Fetch top priority projects within authority scope
     const priorityProjects = await prisma.project.findMany({
       where: {
+        ...scopeFilter,
         riskLevel: { in: ['HIGH', 'MEDIUM'] }
       },
       orderBy: { riskScore: 'desc' },
@@ -192,6 +197,13 @@ router.get('/project/:projectId/summary', authMiddleware, async (req, res) => {
 
     if (!project) {
       return res.status(404).json({ error: 'Project not found' });
+    }
+
+    // Verify authority scope authorization
+    if (!isProjectInScope(req.user, project)) {
+      return res.status(403).json({
+        error: `Access denied. Project '${projectId}' is outside your authorized authority scope.`
+      });
     }
 
     // Financial structured data
@@ -288,7 +300,10 @@ router.get('/project/:projectId/summary', authMiddleware, async (req, res) => {
  */
 router.get('/districts', authMiddleware, async (req, res) => {
   try {
+    const scopeFilter = getAuthorityScopeFilter(req.user);
+
     const projects = await prisma.project.findMany({
+      where: scopeFilter,
       select: {
         district: true,
         state: true,

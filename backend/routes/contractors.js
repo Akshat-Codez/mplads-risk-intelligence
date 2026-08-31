@@ -1,6 +1,7 @@
 import express from 'express';
 import { PrismaClient } from '@prisma/client';
 import authMiddleware from '../middleware/auth.js';
+import { getAuthorityScopeFilter } from '../utils/scopeFilter.js';
 
 const router = express.Router();
 const prisma = new PrismaClient();
@@ -142,8 +143,11 @@ router.get('/:id/projects', authMiddleware, async (req, res) => {
       return res.status(404).json({ error: 'Contractor not found' });
     }
 
-    // Find all projects where the normalized contractor name matches
+    const scopeFilter = getAuthorityScopeFilter(req.user);
+
+    // Find all projects within authority scope where the normalized contractor name matches
     const projects = await prisma.project.findMany({
+      where: scopeFilter,
       orderBy: { riskScore: 'desc' }
     });
 

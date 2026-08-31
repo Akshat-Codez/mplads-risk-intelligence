@@ -13,27 +13,69 @@ export const Login: React.FC = () => {
   const [password, setPassword] = useState('••••••••••••');
   const [captchaInput, setCaptchaInput] = useState('');
   const [selectedRole, setSelectedRole] = useState<Role>(initialRole);
+  const [selectedState, setSelectedState] = useState('Karnataka');
+  const [selectedDistrict, setSelectedDistrict] = useState('BENGALURU URBAN');
+  const [locations, setLocations] = useState<Record<string, string[]>>({
+    'Karnataka': ['BENGALURU URBAN', 'BENGALURU RURAL', 'CHITRADURGA', 'DHARWAD', 'HASSAN', 'MANDYA', 'SHIVAMOGGA', 'TUMAKURU', 'UTTARA KANNADA'],
+    'Uttar Pradesh': ['KHERI', 'UNNAO'],
+    'Bihar': ['MUNGER', 'NAWADA', 'PATNA', 'PURBI CHAMPARAN'],
+    'Kerala': ['ALAPPUZHA', 'IDUKKI', 'KANNUR', 'KASARAGOD', 'KOLLAM', 'KOTTAYAM', 'KOZHIKODE', 'MALAPPURAM', 'PALAKKAD', 'THIRUVANANTHAPURAM', 'THRISSUR', 'WAYANAD'],
+    'Maharashtra': ['NAGPUR'],
+    'Nagaland': ['DIMAPUR', 'KOHIMA', 'MOKOKCHUNG', 'MON', 'PEREN', 'PHEK', 'TUENSANG', 'WOKHA']
+  });
   
   const [error, setError] = useState<string | null>(null);
   
   const { login } = useAuth();
   const navigate = useNavigate();
 
+  React.useEffect(() => {
+    // Attempt fetching dynamic locations from backend
+    fetch('http://localhost:5000/api/auth/locations')
+      .then(res => res.json())
+      .then(data => {
+        if (data.stateDistricts && Object.keys(data.stateDistricts).length > 0) {
+          setLocations(data.stateDistricts);
+        }
+      })
+      .catch(() => {
+        // Use default fallback
+      });
+  }, []);
+
+  const handleStateChange = (st: string) => {
+    setSelectedState(st);
+    const districts = locations[st] || [];
+    if (districts.length > 0) {
+      setSelectedDistrict(districts[0]);
+    }
+  };
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     try {
-      await login(username, selectedRole);
+      await login(
+        username,
+        selectedRole,
+        selectedRole === 'MINISTRY' || selectedRole === 'MINISTER' ? 'All India' : selectedState,
+        selectedRole === 'DISTRICT' ? selectedDistrict : 'All Districts'
+      );
       navigate('/app');
     } catch (err: any) {
       setError(err.message || 'Login failed. Please check credentials.');
     }
   };
 
-  const handleDemoMode = async (demoRole: Role) => {
+  const handleDemoMode = async (demoRole: Role, demoState = 'Karnataka', demoDistrict = 'BENGALURU URBAN') => {
     setError(null);
     try {
-      await login(`DEMO-${demoRole}-2026`, demoRole);
+      await login(
+        `DEMO-${demoRole}-2026`,
+        demoRole,
+        demoRole === 'MINISTRY' || demoRole === 'MINISTER' ? 'All India' : demoState,
+        demoRole === 'DISTRICT' ? demoDistrict : 'All Districts'
+      );
       navigate('/app');
     } catch (err: any) {
       setError('Demo login failed. Make sure server is running.');
@@ -95,12 +137,48 @@ export const Login: React.FC = () => {
                 onChange={(e) => setSelectedRole(e.target.value as Role)}
                 className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 font-bold text-slate-800 focus:ring-2 focus:ring-blue-600"
               >
-                <option value="MINISTER">👔 1. Hon'ble Minister (Executive View)</option>
+                <option value="MINISTER">👔 1. Hon'ble Minister (Executive National View)</option>
                 <option value="MINISTRY">🏛️ 2. Ministry MoSPI (National Operations)</option>
                 <option value="STATE">🏢 3. State Nodal Authority (State Review)</option>
-                <option value="DISTRICT">📍 4. District Collector DC (Field Audits)</option>
+                <option value="DISTRICT">📍 4. District Collector DC (District Field Audits)</option>
               </select>
             </div>
+
+            {/* Dynamic State Selection for State & District Authority */}
+            {(selectedRole === 'STATE' || selectedRole === 'DISTRICT') && (
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">
+                  Select Authorized State <span className="text-red-500">*</span>
+                </label>
+                <select
+                  value={selectedState}
+                  onChange={(e) => handleStateChange(e.target.value)}
+                  className="w-full bg-emerald-50 border border-emerald-300 text-emerald-950 font-bold rounded-lg p-2.5 focus:ring-2 focus:ring-emerald-600"
+                >
+                  {Object.keys(locations).map(st => (
+                    <option key={st} value={st}>{st}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {/* Dynamic District Selection for District Authority */}
+            {selectedRole === 'DISTRICT' && (
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">
+                  Select Authorized District ({selectedState}) <span className="text-red-500">*</span>
+                </label>
+                <select
+                  value={selectedDistrict}
+                  onChange={(e) => setSelectedDistrict(e.target.value)}
+                  className="w-full bg-purple-50 border border-purple-300 text-purple-950 font-bold rounded-lg p-2.5 focus:ring-2 focus:ring-purple-600"
+                >
+                  {(locations[selectedState] || []).map(dt => (
+                    <option key={dt} value={dt}>{dt}</option>
+                  ))}
+                </select>
+              </div>
+            )}
 
             <div>
               <div className="relative">
@@ -153,7 +231,7 @@ export const Login: React.FC = () => {
               type="submit"
               className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg shadow transition text-sm"
             >
-              Login
+              Login as {selectedRole === 'DISTRICT' ? `${selectedDistrict} DC` : selectedRole === 'STATE' ? `${selectedState} Nodal` : 'National Authority'}
             </button>
 
             <p className="text-[10px] text-red-500 text-center font-medium">
@@ -165,17 +243,17 @@ export const Login: React.FC = () => {
           <div className="pt-3 border-t border-slate-200 space-y-2 text-center">
             <span className="text-[10px] text-slate-400 font-bold uppercase">Hackathon Quick Demo Logins:</span>
             <div className="grid grid-cols-2 gap-2 text-[11px]">
-              <button onClick={() => handleDemoMode('MINISTER')} className="p-1.5 bg-amber-50 hover:bg-amber-100 text-amber-900 font-bold rounded border border-amber-200">
-                👔 Minister View
-              </button>
               <button onClick={() => handleDemoMode('MINISTRY')} className="p-1.5 bg-blue-50 hover:bg-blue-100 text-blue-900 font-bold rounded border border-blue-200">
-                🏛️ Ministry MoSPI
+                🏛️ MoSPI National (All India)
               </button>
-              <button onClick={() => handleDemoMode('STATE')} className="p-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-900 font-bold rounded border border-emerald-200">
-                🏢 State Nodal
+              <button onClick={() => handleDemoMode('STATE', 'Karnataka')} className="p-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-900 font-bold rounded border border-emerald-200">
+                🏢 State Nodal (Karnataka)
               </button>
-              <button onClick={() => handleDemoMode('DISTRICT')} className="p-1.5 bg-purple-50 hover:bg-purple-100 text-purple-900 font-bold rounded border border-purple-200">
-                📍 District DC
+              <button onClick={() => handleDemoMode('DISTRICT', 'Karnataka', 'BENGALURU URBAN')} className="p-1.5 bg-purple-50 hover:bg-purple-100 text-purple-900 font-bold rounded border border-purple-200">
+                📍 DC Bengaluru Urban
+              </button>
+              <button onClick={() => handleDemoMode('STATE', 'Uttar Pradesh')} className="p-1.5 bg-amber-50 hover:bg-amber-100 text-amber-900 font-bold rounded border border-amber-200">
+                🏢 State Nodal (Uttar Pradesh)
               </button>
             </div>
           </div>

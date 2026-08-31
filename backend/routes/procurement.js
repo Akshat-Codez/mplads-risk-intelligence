@@ -5,6 +5,7 @@ import fs from 'fs';
 import { PrismaClient } from '@prisma/client';
 import authMiddleware from '../middleware/auth.js';
 import { recalculateOverallProjectRisks } from './projects.js';
+import { isProjectInScope } from '../utils/scopeFilter.js';
 
 const router = express.Router();
 const prisma = new PrismaClient();
@@ -83,6 +84,12 @@ router.post('/upload', authMiddleware, upload.single('file'), async (req, res) =
 
     if (!project) {
       return res.status(404).json({ error: 'Associated project not found' });
+    }
+
+    if (!isProjectInScope(req.user, project)) {
+      return res.status(403).json({
+        error: `Access denied. Cannot upload documents for project '${project.projectId}' outside your authorized jurisdiction.`
+      });
     }
 
     // Create record in Procurement table
@@ -212,6 +219,21 @@ router.post('/:documentId/analyze', authMiddleware, async (req, res) => {
 router.get('/:projectId', authMiddleware, async (req, res) => {
   try {
     const { projectId } = req.params;
+
+    const project = await prisma.project.findFirst({
+      where: {
+        OR: [
+          { id: projectId },
+          { projectId: projectId }
+        ]
+      }
+    });
+
+    if (project && !isProjectInScope(req.user, project)) {
+      return res.status(403).json({
+        error: `Access denied. Procurement records for project '${projectId}' are outside your authorized jurisdiction.`
+      });
+    }
 
     // Retrieve the latest procurement document associated with this project id
     const doc = await prisma.procurement.findFirst({

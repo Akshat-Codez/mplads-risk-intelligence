@@ -1,11 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../../services/api';
+import { useAuth } from '../../context/AuthContext';
 import { ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { ShieldAlert, AlertTriangle, CheckCircle2, MapPin, Building2, FileText, ArrowRight, Sparkles } from 'lucide-react';
 
 export const Dashboard: React.FC = () => {
   const navigate = useNavigate();
+  const { user, role } = useAuth();
   const [stats, setStats] = useState<any>(null);
   const [datasetInfo, setDatasetInfo] = useState<any>(null);
   const [highRiskWorks, setHighRiskWorks] = useState<any[]>([]);
@@ -42,7 +44,7 @@ export const Dashboard: React.FC = () => {
       }
     };
     fetchData();
-  }, []);
+  }, [role, user?.state, user?.district]);
 
   const handleUpdateInvestigation = async (workId: string, status: string) => {
     try {
@@ -67,6 +69,38 @@ export const Dashboard: React.FC = () => {
 
   return (
     <div className="p-6 space-y-6 font-sans bg-slate-50 min-h-screen">
+      {/* Scope Status Banner */}
+      <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+        <div className="flex items-center space-x-3">
+          <span className="text-xl">
+            {role === 'DISTRICT' ? '📍' : role === 'STATE' ? '🏢' : '🏛️'}
+          </span>
+          <div>
+            <div className="flex items-center space-x-2">
+              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Active Jurisdiction:</span>
+              <span className={`text-xs font-extrabold px-2.5 py-0.5 rounded-full border ${
+                role === 'DISTRICT' ? 'bg-purple-100 text-purple-900 border-purple-300' :
+                role === 'STATE' ? 'bg-emerald-100 text-emerald-900 border-emerald-300' :
+                'bg-blue-100 text-blue-900 border-blue-300'
+              }`}>
+                {role === 'DISTRICT' ? `DISTRICT AUTHORITY — ${user?.district}, ${user?.state}` :
+                 role === 'STATE' ? `STATE AUTHORITY — ${user?.state}` :
+                 'NATIONAL MOSPI AUTHORITY (ALL INDIA)'}
+              </span>
+            </div>
+            <p className="text-[11px] text-slate-600 font-medium mt-0.5">
+              {role === 'DISTRICT' ? `Strictly filtered to works registered in ${user?.district}, ${user?.state}. Other districts are isolated server-side.` :
+               role === 'STATE' ? `Strictly filtered to all works across ${user?.state}. Non-state works are isolated server-side.` :
+               'Full nationwide portfolio oversight across all 28 States and 8 Union Territories.'}
+            </p>
+          </div>
+        </div>
+        <div className="text-right">
+          <span className="text-[10px] text-slate-400 font-mono">Scoped Works Count:</span>
+          <p className="text-lg font-black text-slate-900 leading-none">{stats?.total_works || 0} Works</p>
+        </div>
+      </div>
+
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-slate-200 pb-4">
         <div>

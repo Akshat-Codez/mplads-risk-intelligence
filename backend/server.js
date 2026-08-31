@@ -101,10 +101,96 @@ app.post('/api/auth/register', async (req, res) => {
   }
 });
 
+// GET /api/auth/locations - Available States and Districts
+app.get('/api/auth/locations', async (req, res) => {
+  try {
+    const records = await prisma.project.findMany({
+      select: { state: true, district: true },
+      distinct: ['state', 'district'],
+      orderBy: [{ state: 'asc' }, { district: 'asc' }]
+    });
+
+    const stateDistricts = {};
+    for (const r of records) {
+      if (!r.state || !r.state.trim()) continue;
+      const st = r.state.trim();
+      const dt = r.district ? r.district.trim() : null;
+      if (!stateDistricts[st]) {
+        stateDistricts[st] = [];
+      }
+      if (dt && !stateDistricts[st].includes(dt)) {
+        stateDistricts[st].push(dt);
+      }
+    }
+
+    for (const st of Object.keys(stateDistricts)) {
+      stateDistricts[st].sort();
+    }
+
+    res.json({
+      states: Object.keys(stateDistricts).sort(),
+      stateDistricts
+    });
+  } catch (err) {
+    console.error('Error fetching locations:', err);
+    res.status(500).json({ error: 'Failed to fetch location hierarchy' });
+  }
+});
+
+// SET / UPDATE AUTHORITY SCOPE Endpoint
+app.post('/api/auth/set-scope', authMiddleware, async (req, res) => {
+  try {
+    const { role, state, district } = req.body;
+    const targetRole = role ? role.toUpperCase() : req.user.role;
+    
+    let targetState = state || req.user.state || 'All India';
+    let targetDistrict = district || req.user.district || 'All Districts';
+
+    if (['MINISTRY', 'ADMIN', 'SUPER_ADMIN', 'MINISTER'].includes(targetRole)) {
+      targetState = 'All India';
+      targetDistrict = 'All Districts';
+    } else if (targetRole === 'STATE') {
+      targetDistrict = 'All Districts';
+    }
+
+    const updatedUser = await prisma.user.update({
+      where: { id: req.user.id },
+      data: {
+        role: targetRole,
+        state: targetState,
+        district: targetDistrict
+      }
+    });
+
+    const token = jwt.sign(
+      { userId: updatedUser.id, authorityId: updatedUser.authorityId, role: updatedUser.role },
+      JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+
+    res.json({
+      message: 'Authority scope updated successfully',
+      token,
+      user: {
+        id: updatedUser.id,
+        authorityId: updatedUser.authorityId,
+        name: updatedUser.name,
+        email: updatedUser.email,
+        role: updatedUser.role,
+        state: updatedUser.state,
+        district: updatedUser.district
+      }
+    });
+  } catch (err) {
+    console.error('Error updating authority scope:', err);
+    res.status(500).json({ error: 'Failed to update authority scope' });
+  }
+});
+
 // LOGIN Endpoint
 app.post('/api/auth/login', async (req, res) => {
   try {
-    const { authorityId, password, role } = req.body;
+    const { authorityId, password, role, state, district } = req.body;
 
     if (!authorityId || !password) {
       return res.status(400).json({ error: 'Please provide Authority Code/Email and Password' });
@@ -115,26 +201,50 @@ app.post('/api/auth/login', async (req, res) => {
       where: { OR: [{ authorityId }, { email: authorityId }] }
     });
 
+    const assignedRole = role ? role.toUpperCase() : 'MINISTRY';
+    let assignedState = state || 'All India';
+    let assignedDistrict = district || 'All Districts';
+
+    if (assignedRole === 'STATE') {
+      assignedState = state || 'Karnataka';
+      assignedDistrict = 'All Districts';
+    } else if (assignedRole === 'DISTRICT') {
+      assignedState = state || 'Karnataka';
+      assignedDistrict = district || 'BENGALURU URBAN';
+    }
+
     // If demo mode or user not in DB, auto-seed/authenticate for Hackathon smoothness
     if (!user) {
       const passwordHash = await bcrypt.hash(password || 'password', 10);
       user = await prisma.user.create({
         data: {
           authorityId: authorityId.toUpperCase(),
-          name: role === 'MINISTER' ? 'Honble Minister of State' : 
-                role === 'STATE' ? 'State Nodal Officer (UP)' :
-                role === 'DISTRICT' ? 'District Collector (Varanasi)' : 'National MoSPI Admin',
+          name: assignedRole === 'MINISTER' ? 'Honble Minister of State' : 
+                assignedRole === 'STATE' ? `State Nodal Officer (${assignedState})` :
+                assignedRole === 'DISTRICT' ? `District Collector (${assignedDistrict})` : 'National MoSPI Admin',
           email: `${authorityId.toLowerCase().replace(/[^a-z0-9]/g, '')}@gov.in`,
           passwordHash,
-          role: role ? role.toUpperCase() : 'MINISTRY',
-          state: role === 'STATE' || role === 'DISTRICT' ? 'Uttar Pradesh' : 'All India',
-          district: role === 'DISTRICT' ? 'Varanasi' : 'All Districts'
+          role: assignedRole,
+          state: assignedState,
+          district: assignedDistrict
         }
       });
     } else {
       const isMatch = await bcrypt.compare(password, user.passwordHash);
       if (!isMatch && password !== '••••••••••••') {
         return res.status(401).json({ error: 'Invalid Authority Credentials' });
+      }
+
+      // If specific role / state / district was requested during login, update user record
+      if (role || state || district) {
+        user = await prisma.user.update({
+          where: { id: user.id },
+          data: {
+            role: assignedRole,
+            state: assignedState,
+            district: assignedDistrict
+          }
+        });
       }
     }
 

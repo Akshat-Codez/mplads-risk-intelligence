@@ -1,6 +1,7 @@
 import express from 'express';
 import { PrismaClient } from '@prisma/client';
 import authMiddleware from '../middleware/auth.js';
+import { getAuthorityScopeFilter } from '../utils/scopeFilter.js';
 
 const router = express.Router();
 const prisma = new PrismaClient();
@@ -37,10 +38,20 @@ function parseProjectJsonFields(project) {
 router.get('/summary', authMiddleware, async (req, res) => {
   try {
     const { state, district } = req.query;
+    const scopeFilter = getAuthorityScopeFilter(req.user);
 
-    const where = {};
+    let where = {};
     if (state) where.state = state;
     if (district) where.district = district;
+
+    // Apply mandatory authority scope
+    if (Object.keys(scopeFilter).length > 0) {
+      if (scopeFilter.AND) {
+        where.AND = [...(where.AND || []), ...scopeFilter.AND];
+      } else {
+        where = { ...where, ...scopeFilter };
+      }
+    }
 
     const [
       totalProjects,
@@ -130,10 +141,20 @@ router.get('/dataset-info', authMiddleware, async (req, res) => {
 router.get('/analytics', authMiddleware, async (req, res) => {
   try {
     const { state, district } = req.query;
+    const scopeFilter = getAuthorityScopeFilter(req.user);
 
-    const where = {};
+    let where = {};
     if (state) where.state = state;
     if (district) where.district = district;
+
+    // Apply mandatory authority scope
+    if (Object.keys(scopeFilter).length > 0) {
+      if (scopeFilter.AND) {
+        where.AND = [...(where.AND || []), ...scopeFilter.AND];
+      } else {
+        where = { ...where, ...scopeFilter };
+      }
+    }
 
     // Get distribution of risk levels
     const [high, medium, low] = await Promise.all([

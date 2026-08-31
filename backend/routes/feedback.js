@@ -1,6 +1,7 @@
 import express from 'express';
 import { PrismaClient } from '@prisma/client';
 import authMiddleware from '../middleware/auth.js';
+import { getAuthorityScopeFilter, isProjectInScope } from '../utils/scopeFilter.js';
 
 const router = express.Router();
 const prisma = new PrismaClient();
@@ -52,6 +53,13 @@ router.post('/projects/:projectId/feedback', authMiddleware, async (req, res) =>
 
     if (!project) {
       return res.status(404).json({ error: `Project '${projectId}' not found` });
+    }
+
+    // Verify authority scope authorization
+    if (!isProjectInScope(req.user, project)) {
+      return res.status(403).json({
+        error: `Access denied. Cannot record feedback for project '${projectId}' outside your authorized authority scope.`
+      });
     }
 
     // 4. Capture exact snapshot of AI prediction state AT TIME OF REVIEW
@@ -147,6 +155,13 @@ router.get('/projects/:projectId/feedback', authMiddleware, async (req, res) => 
       return res.status(404).json({ error: `Project '${projectId}' not found` });
     }
 
+    // Verify authority scope authorization
+    if (!isProjectInScope(req.user, project)) {
+      return res.status(403).json({
+        error: `Access denied. Feedback for project '${projectId}' is outside your authorized authority scope.`
+      });
+    }
+
     const feedbacks = await prisma.feedback.findMany({
       where: { projectId: project.id },
       orderBy: { createdAt: 'desc' },
@@ -189,7 +204,11 @@ router.get('/projects/:projectId/feedback', authMiddleware, async (req, res) => 
  */
 router.get('/', authMiddleware, async (req, res) => {
   try {
+    const scopeFilter = getAuthorityScopeFilter(req.user);
+    const feedbackWhere = Object.keys(scopeFilter).length > 0 ? { project: scopeFilter } : {};
+
     const feedbacks = await prisma.feedback.findMany({
+      where: feedbackWhere,
       orderBy: { createdAt: 'desc' },
       take: 100,
       include: {
@@ -238,15 +257,19 @@ router.get('/', authMiddleware, async (req, res) => {
  */
 router.get('/metrics', authMiddleware, async (req, res) => {
   try {
-    const totalCount = await prisma.feedback.count();
-    const confirmedCount = await prisma.feedback.count({ where: { officerDecision: 'CONFIRMED' } });
-    const falsePositiveCount = await prisma.feedback.count({ where: { officerDecision: 'FALSE_POSITIVE' } });
-    const requiresInvestigationCount = await prisma.feedback.count({ where: { officerDecision: 'REQUIRES_INVESTIGATION' } });
-    const insufficientDataCount = await prisma.feedback.count({ where: { officerDecision: 'INSUFFICIENT_DATA' } });
+    const scopeFilter = getAuthorityScopeFilter(req.user);
+    const feedbackWhere = Object.keys(scopeFilter).length > 0 ? { project: scopeFilter } : {};
+
+    const totalCount = await prisma.feedback.count({ where: feedbackWhere });
+    const confirmedCount = await prisma.feedback.count({ where: { ...feedbackWhere, officerDecision: 'CONFIRMED' } });
+    const falsePositiveCount = await prisma.feedback.count({ where: { ...feedbackWhere, officerDecision: 'FALSE_POSITIVE' } });
+    const requiresInvestigationCount = await prisma.feedback.count({ where: { ...feedbackWhere, officerDecision: 'REQUIRES_INVESTIGATION' } });
+    const insufficientDataCount = await prisma.feedback.count({ where: { ...feedbackWhere, officerDecision: 'INSUFFICIENT_DATA' } });
 
     // Distinct reviewed projects count
     const distinctProjects = await prisma.feedback.groupBy({
-      by: ['projectId']
+      by: ['projectId'],
+      where: feedbackWhere
     });
 
     res.json({

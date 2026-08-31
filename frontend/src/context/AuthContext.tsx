@@ -5,8 +5,9 @@ import api from '../services/api';
 interface AuthContextType {
   user: User | null;
   role: Role;
-  login: (emailOrAuthId: string, role: Role) => Promise<void>;
+  login: (emailOrAuthId: string, role: Role, state?: string, district?: string) => Promise<void>;
   register: (name: string, email: string, authorityId: string, role: Role, state?: string, district?: string) => Promise<void>;
+  setScope: (role: Role, state?: string, district?: string) => Promise<void>;
   logout: () => void;
   setRole: (role: Role) => void;
   loading: boolean;
@@ -42,12 +43,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     initAuth();
   }, []);
 
-  const login = async (emailOrAuthId: string, selectedRole: Role) => {
+  const login = async (emailOrAuthId: string, selectedRole: Role, state?: string, district?: string) => {
     try {
       const res = await api.post('/auth/login', {
         authorityId: emailOrAuthId,
         password: 'password', // Demo password
-        role: selectedRole
+        role: selectedRole,
+        state,
+        district
       });
       
       const { token, user: loggedUser } = res.data;
@@ -57,6 +60,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (err: any) {
       console.error('Login request failed:', err);
       throw new Error(err.response?.data?.error || 'Invalid credentials');
+    }
+  };
+
+  const setScope = async (targetRole: Role, state?: string, district?: string) => {
+    try {
+      const res = await api.post('/auth/set-scope', {
+        role: targetRole,
+        state,
+        district
+      });
+
+      const { token, user: updatedUser } = res.data;
+      localStorage.setItem('token', token);
+      setUser(updatedUser);
+      setRoleState(updatedUser.role as Role);
+    } catch (err: any) {
+      console.error('Failed to update authority scope:', err);
+      throw new Error(err.response?.data?.error || 'Failed to update authority scope');
     }
   };
 
@@ -95,7 +116,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   return (
-    <AuthContext.Provider value={{ user, role, login, register, logout, setRole, loading }}>
+    <AuthContext.Provider value={{ user, role, login, register, setScope, logout, setRole, loading }}>
       {children}
     </AuthContext.Provider>
   );

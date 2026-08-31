@@ -1,6 +1,7 @@
 import express from 'express';
 import { PrismaClient } from '@prisma/client';
 import authMiddleware from '../middleware/auth.js';
+import { getAuthorityScopeFilter, isProjectInScope } from '../utils/scopeFilter.js';
 import fs from 'fs';
 import path from 'path';
 import { parse } from 'csv-parse/sync';
@@ -109,9 +110,12 @@ router.get('/', authMiddleware, async (req, res) => {
       sort_order = 'desc'
     } = req.query;
 
-    const where = {};
+    // Base authority scoping filter
+    const scopeFilter = getAuthorityScopeFilter(req.user);
 
-    // Filter by fields if specified
+    let where = {};
+
+    // Apply user filters
     if (state) where.state = state;
     if (district) where.district = district;
     if (constituency) where.constituency = constituency;
@@ -137,6 +141,15 @@ router.get('/', authMiddleware, async (req, res) => {
         { vendorName: { contains: searchLower } },
         { mpName: { contains: searchLower } }
       ];
+    }
+
+    // Merge with mandatory server-side authority scope
+    if (Object.keys(scopeFilter).length > 0) {
+      if (scopeFilter.AND) {
+        where.AND = [...(where.AND || []), ...scopeFilter.AND];
+      } else {
+        where = { ...where, ...scopeFilter };
+      }
     }
 
     // Order By
@@ -196,6 +209,13 @@ router.get('/:id', authMiddleware, async (req, res) => {
 
     if (!project) {
       return res.status(404).json({ error: 'Project not found' });
+    }
+
+    // Verify authority scope authorization
+    if (!isProjectInScope(req.user, project)) {
+      return res.status(403).json({
+        error: `Access denied. Project '${projectId}' in ${project.district || 'Unknown'}, ${project.state || 'Unknown'} is outside your authorized authority scope.`
+      });
     }
 
     const mapped = mapProjectToFrontend(project);
@@ -258,6 +278,13 @@ router.post('/:id/investigate', authMiddleware, async (req, res) => {
 
     if (!project) {
       return res.status(404).json({ error: 'Project not found' });
+    }
+
+    // Verify authority scope authorization
+    if (!isProjectInScope(req.user, project)) {
+      return res.status(403).json({
+        error: `Access denied. Cannot modify investigation for project '${projectId}' outside your authorized authority scope.`
+      });
     }
 
     // Check if there is an existing case for this project

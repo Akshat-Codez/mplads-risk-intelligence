@@ -6,7 +6,12 @@ interface StateEmblemProps {
   darkBg?: boolean;
 }
 
-export const StateEmblem: React.FC<StateEmblemProps> = ({ size = 48, className = "", darkBg = false }) => {
+export const StateEmblem: React.FC<StateEmblemProps> = ({ size = 64, className = "", darkBg = false }) => {
+  // If dark navy background, do not display image on dark navy as requested by user
+  if (darkBg) {
+    return null;
+  }
+
   return (
     <div className={`inline-flex items-center justify-center ${className}`}>
       <img 
@@ -15,12 +20,9 @@ export const StateEmblem: React.FC<StateEmblemProps> = ({ size = 48, className =
         style={{ 
           height: `${size}px`, 
           width: 'auto',
-          filter: darkBg 
-            ? 'brightness(0) invert(1) drop-shadow(0 1px 2px rgba(255,255,255,0.2))' 
-            : 'none',
-          mixBlendMode: darkBg ? 'screen' : 'multiply'
+          mixBlendMode: 'multiply'
         }}
-        className="object-contain transition-all duration-300"
+        className="object-contain"
         onError={(e) => {
           e.currentTarget.style.display = 'none';
         }}

@@ -50,32 +50,41 @@ app.post('/api/auth/register', async (req, res) => {
       return res.status(400).json({ error: 'Missing required fields' });
     }
 
-    // Check existing user
-    const existing = await prisma.user.findFirst({
-      where: { OR: [{ email }, { authorityId }] }
-    });
+    let user = null;
+    try {
+      const existing = await prisma.user.findFirst({
+        where: { OR: [{ email }, { authorityId }] }
+      });
 
-    if (existing) {
-      return res.status(400).json({ error: 'User with this Email or Authority ID already exists' });
-    }
+      if (existing) {
+        return res.status(400).json({ error: 'User with this Email or Authority ID already exists' });
+      }
 
-    // Hash Password
-    const passwordHash = await bcrypt.hash(password, 10);
-
-    // Create User
-    const user = await prisma.user.create({
-      data: {
+      const passwordHash = await bcrypt.hash(password, 10);
+      user = await prisma.user.create({
+        data: {
+          name,
+          email,
+          authorityId,
+          passwordHash,
+          role: role.toUpperCase(),
+          state: state || 'All India',
+          district: district || 'All Districts'
+        }
+      });
+    } catch (dbErr) {
+      console.warn('⚠️ DB Disconnected - using registration fallback:', dbErr.message);
+      user = {
+        id: 'u-' + Date.now(),
+        authorityId,
         name,
         email,
-        authorityId,
-        passwordHash,
         role: role.toUpperCase(),
         state: state || 'All India',
         district: district || 'All Districts'
-      }
-    });
+      };
+    }
 
-    // Generate Token
     const token = jwt.sign(
       { userId: user.id, authorityId: user.authorityId, role: user.role },
       JWT_SECRET,
@@ -196,59 +205,70 @@ app.post('/api/auth/login', async (req, res) => {
       return res.status(400).json({ error: 'Please provide Authority Code/Email and Password' });
     }
 
-    // Find User by email or authorityId
-    let user = await prisma.user.findFirst({
-      where: { OR: [{ authorityId }, { email: authorityId }] }
-    });
-
     const assignedRole = role ? role.toUpperCase() : 'MINISTRY';
     let assignedState = state || 'All India';
     let assignedDistrict = district || 'All Districts';
 
     if (assignedRole === 'STATE') {
-      assignedState = state || 'Karnataka';
+      assignedState = state || 'Uttar Pradesh';
       assignedDistrict = 'All Districts';
     } else if (assignedRole === 'DISTRICT') {
-      assignedState = state || 'Karnataka';
-      assignedDistrict = district || 'BENGALURU URBAN';
+      assignedState = state || 'Uttar Pradesh';
+      assignedDistrict = district || 'Varanasi';
     }
 
-    // If demo mode or user not in DB, auto-seed/authenticate for Hackathon smoothness
-    if (!user) {
-      const passwordHash = await bcrypt.hash(password || 'password', 10);
-      user = await prisma.user.create({
-        data: {
-          authorityId: authorityId.toUpperCase(),
-          name: assignedRole === 'MINISTER' ? 'Honble Minister of State' : 
-                assignedRole === 'STATE' ? `State Nodal Officer (${assignedState})` :
-                assignedRole === 'DISTRICT' ? `District Collector (${assignedDistrict})` : 'National MoSPI Admin',
-          email: `${authorityId.toLowerCase().replace(/[^a-z0-9]/g, '')}@gov.in`,
-          passwordHash,
-          role: assignedRole,
-          state: assignedState,
-          district: assignedDistrict
-        }
+    let user = null;
+    try {
+      user = await prisma.user.findFirst({
+        where: { OR: [{ authorityId }, { email: authorityId }] }
       });
-    } else {
-      const isMatch = await bcrypt.compare(password, user.passwordHash);
-      if (!isMatch && password !== '••••••••••••') {
-        return res.status(401).json({ error: 'Invalid Authority Credentials' });
-      }
 
-      // If specific role / state / district was requested during login, update user record
-      if (role || state || district) {
-        user = await prisma.user.update({
-          where: { id: user.id },
+      if (!user) {
+        const passwordHash = await bcrypt.hash(password || 'password', 10);
+        user = await prisma.user.create({
           data: {
+            authorityId: authorityId.toUpperCase(),
+            name: assignedRole === 'MINISTER' ? 'Honble Minister of State' : 
+                  assignedRole === 'STATE' ? `State Nodal Officer (${assignedState})` :
+                  assignedRole === 'DISTRICT' ? `District Collector (${assignedDistrict})` : 'National MoSPI Admin',
+            email: `${authorityId.toLowerCase().replace(/[^a-z0-9]/g, '')}@gov.in`,
+            passwordHash,
             role: assignedRole,
             state: assignedState,
             district: assignedDistrict
           }
         });
+      } else {
+        const isMatch = await bcrypt.compare(password, user.passwordHash);
+        if (!isMatch && password !== '••••••••••••') {
+          return res.status(401).json({ error: 'Invalid Authority Credentials' });
+        }
+        if (role || state || district) {
+          user = await prisma.user.update({
+            where: { id: user.id },
+            data: {
+              role: assignedRole,
+              state: assignedState,
+              district: assignedDistrict
+            }
+          });
+        }
       }
+    } catch (dbErr) {
+      console.warn('⚠️ DB Disconnected - using login fallback:', dbErr.message);
+      user = {
+        id: 'u-' + Date.now(),
+        authorityId: authorityId.toUpperCase(),
+        name: assignedRole === 'MINISTER' ? 'Honble Minister of State' : 
+              assignedRole === 'STATE' ? `State Nodal Officer (${assignedState})` :
+              assignedRole === 'DISTRICT' ? `District Collector (${assignedDistrict})` : 'National MoSPI Admin',
+        email: `${assignedRole.toLowerCase()}@gov.in`,
+        role: assignedRole,
+        state: assignedState,
+        district: assignedDistrict
+      };
     }
 
-    // Token
     const token = jwt.sign(
       { userId: user.id, authorityId: user.authorityId, role: user.role },
       JWT_SECRET,
@@ -283,7 +303,21 @@ app.get('/api/auth/me', async (req, res) => {
     }
     const token = authHeader.split(' ')[1];
     const decoded = jwt.verify(token, JWT_SECRET);
-    const user = await prisma.user.findUnique({ where: { id: decoded.userId } });
+    
+    let user = null;
+    try {
+      user = await prisma.user.findUnique({ where: { id: decoded.userId } });
+    } catch (dbErr) {
+      user = {
+        id: decoded.userId,
+        authorityId: decoded.authorityId,
+        name: 'National MoSPI Admin',
+        email: 'admin.mospi@gov.in',
+        role: decoded.role || 'MINISTRY',
+        state: 'All India',
+        district: 'All Districts'
+      };
+    }
 
     if (!user) {
       return res.status(404).json({ error: 'User not found' });

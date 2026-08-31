@@ -98,6 +98,21 @@ export const Login: React.FC = () => {
             </span>
           </div>
 
+          {/* Center Formal Portrait */}
+          <div className="relative z-10 flex flex-col items-center justify-center my-auto py-4">
+            <div className="relative">
+              <div className="absolute -inset-1 bg-gradient-to-r from-amber-500/30 via-slate-700/40 to-amber-500/30 rounded-full blur-sm opacity-80" />
+              <div className="relative w-36 h-36 sm:w-44 sm:h-44 rounded-full overflow-hidden border-2 border-amber-400/60 shadow-2xl bg-slate-950 ring-4 ring-slate-900/80">
+                <img
+                  src="https://tse4.mm.bing.net/th/id/OIP.evmb_tz_sypCxmQYEqEZCAAAAA?r=0&w=400&h=400&rs=1&pid=ImgDetMain&o=7&rm=3"
+                  alt="Official Portrait"
+                  className="w-full h-full object-cover object-top"
+                  loading="eager"
+                />
+              </div>
+            </div>
+          </div>
+
           {/* Bottom Left Title */}
           <div className="relative z-10 space-y-2">
             <h1 className="text-4xl font-black font-serif text-white tracking-tight">eSAKSHI</h1>

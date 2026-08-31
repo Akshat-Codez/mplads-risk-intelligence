@@ -165,6 +165,48 @@ export const ProjectDetail: React.FC = () => {
         </div>
       </div>
 
+      {/* Associated Contractor & Compatibility Card */}
+      {project.vendorName && (
+        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-4">
+          <div className="flex justify-between items-center border-b pb-3">
+            <h3 className="text-base font-bold text-slate-900">Contractor Profile & Project Compatibility</h3>
+            {project.contractor_risk && (
+              <span className={`text-[10px] px-2.5 py-0.5 rounded-full font-bold uppercase ${
+                project.contractor_risk.level === 'HIGH' ? 'bg-red-100 text-red-700 border border-red-200' :
+                project.contractor_risk.level === 'MEDIUM' ? 'bg-amber-100 text-amber-700 border border-amber-200' : 'bg-green-100 text-green-700 border border-green-200'
+              }`}>
+                Vendor Risk: {project.contractor_risk.level}
+              </span>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-xs">
+            <div className="space-y-2">
+              <span className="text-slate-400 font-medium block">Contractor Name</span>
+              <p className="font-extrabold text-slate-900 text-sm">{project.vendorName}</p>
+              {project.contractor_risk && (
+                <p className="text-[10px] text-slate-500 font-semibold mt-1">Confidence Score: {project.contractor_risk.confidence}% (Data Completeness)</p>
+              )}
+            </div>
+
+            {project.contractor_risk && (
+              <div className="md:col-span-2 space-y-2">
+                <span className="font-bold text-slate-700 block">Observed Review Flags & Compatibility Signals</span>
+                {project.contractor_risk.signals.length === 0 ? (
+                  <p className="text-green-600 font-medium">No contractor concentration or type compatibility signals triggered.</p>
+                ) : (
+                  <ul className="list-disc pl-5 space-y-1 text-slate-600 font-medium">
+                    {project.contractor_risk.signals.map((sig: string, i: number) => (
+                      <li key={i}>{sig}</li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* AI Anomaly Explanation Breakdown Cards */}
       <div className="space-y-3">
         <h3 className="text-base font-bold text-slate-900">AI Flagged Evidence (Explainability)</h3>

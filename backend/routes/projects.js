@@ -210,6 +210,35 @@ router.get('/:id', authMiddleware, async (req, res) => {
       notes: latestAction ? latestAction.notes : ''
     };
 
+    // Normalize contractor names helper
+    function normalizeName(name) {
+      if (!name) return 'unknown';
+      const primary = name.split(',')[0].trim();
+      return primary
+        .toLowerCase()
+        .replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g, '')
+        .replace(/\s+/g, '')
+        .replace(/(pvtltd|pvt|ltd|limited|company|co|construction|constructions|infra|infrastructure|developers|projects)$/g, '');
+    }
+
+    let contractorRisk = null;
+    if (project.vendorName) {
+      const normName = normalizeName(project.vendorName);
+      const contractor = await prisma.contractor.findUnique({
+        where: { normalizedName: normName }
+      });
+      if (contractor) {
+        contractorRisk = {
+          id: contractor.id,
+          score: contractor.contractorRiskScore,
+          level: contractor.contractorRiskLevel,
+          signals: contractor.contractorRiskSignals ? JSON.parse(contractor.contractorRiskSignals) : [],
+          confidence: contractor.confidenceScore
+        };
+      }
+    }
+    mapped.contractor_risk = contractorRisk;
+
     res.json(mapped);
   } catch (err) {
     console.error('Error fetching project detail:', err);
@@ -382,6 +411,95 @@ async function syncDatabaseWithScoredCsv() {
     }
   }
   console.log(`Synced ${count} projects into database.`);
+  await recalculateOverallProjectRisks(prisma);
+}
+
+export async function recalculateOverallProjectRisks(prismaInstance) {
+  console.log('Recalculating overall project risk scores and levels...');
+  const projects = await prismaInstance.project.findMany({
+    include: {
+      procurements: {
+        orderBy: { createdAt: 'desc' }
+      }
+    }
+  });
+
+  const contractors = await prismaInstance.contractor.findMany();
+  const contractorMap = new Map();
+  contractors.forEach(c => {
+    contractorMap.set(c.normalizedName, c);
+  });
+
+  function normalizeName(name) {
+    if (!name) return 'unknown';
+    const primary = name.split(',')[0].trim();
+    return primary
+      .toLowerCase()
+      .replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g, '')
+      .replace(/\s+/g, '')
+      .replace(/(pvtltd|pvt|ltd|limited|company|co|construction|constructions|infra|infrastructure|developers|projects)$/g, '');
+  }
+
+  let count = 0;
+  for (const p of projects) {
+    const finScore = p.financialRiskScore || 0;
+    
+    const latestProc = p.procurements && p.procurements.length > 0 ? p.procurements[0] : null;
+    const procScore = latestProc && latestProc.status === 'Analyzed' ? latestProc.procurementRiskScore : null;
+
+    let contractorScore = null;
+    if (p.vendorName) {
+      const norm = normalizeName(p.vendorName);
+      const c = contractorMap.get(norm);
+      if (c) {
+        contractorScore = c.contractorRiskScore || 0;
+      }
+    }
+
+    let weightSum = 0.5;
+    let weightedScoreSum = 0.5 * finScore;
+    let confidence = 50;
+
+    if (procScore !== null) {
+      weightSum += 0.3;
+      weightedScoreSum += 0.3 * procScore;
+      confidence += 30;
+    }
+    if (contractorScore !== null) {
+      weightSum += 0.2;
+      weightedScoreSum += 0.2 * contractorScore;
+      confidence += 20;
+    }
+
+    const overallScore = Math.round((weightedScoreSum / weightSum) * 10) / 10;
+
+    let overallLevel = 'LOW';
+    if (confidence < 60 && overallScore < 25.0) {
+      overallLevel = 'INSUFFICIENT DATA';
+    } else if (overallScore >= 50.0) {
+      overallLevel = 'HIGH';
+    } else if (overallScore >= 25.0) {
+      overallLevel = 'MEDIUM';
+    }
+
+    const comps = {
+      financial: finScore,
+      procurement: procScore,
+      contractor: contractorScore,
+      confidence: confidence
+    };
+
+    await prismaInstance.project.update({
+      where: { id: p.id },
+      data: {
+        riskScore: overallScore,
+        riskLevel: overallLevel,
+        riskComponents: JSON.stringify(comps)
+      }
+    });
+    count++;
+  }
+  console.log(`Recalculated overall risk for ${count} projects.`);
 }
 
 // POST /api/projects/run-analysis - trigger AI analysis and sync results

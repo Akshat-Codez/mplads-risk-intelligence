@@ -9,6 +9,7 @@ import dotenv from 'dotenv';
 import projectRoutes from './routes/projects.js';
 import dashboardRoutes from './routes/dashboard.js';
 import procurementRoutes from './routes/procurement.js';
+import contractorRoutes from './routes/contractors.js';
 import authMiddleware from './middleware/auth.js';
 
 dotenv.config();
@@ -25,6 +26,7 @@ app.use(express.json());
 app.use('/api/projects', projectRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/procurement', procurementRoutes);
+app.use('/api/contractors', contractorRoutes);
 
 
 // Health Check

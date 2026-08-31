@@ -152,6 +152,18 @@ model Contractor {
   concentrationScore Float?
   riskLevel          String   @default("LOW")
   isDemo             Boolean  @default(false)
+  
+  // Future-ready Official status
+  officialStatusSource String?
+  officialStatus       String?
+  statusVerifiedAt     DateTime?
+
+  // Granular contractor risk scores (Phase 4)
+  contractorRiskScore  Float?   @default(0)
+  contractorRiskLevel  String?  @default("LOW")
+  contractorRiskSignals String? // JSON string array
+  confidenceScore      Float?   @default(0)
+
   createdAt          DateTime @default(now())
 }
 

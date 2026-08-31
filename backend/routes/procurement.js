@@ -4,6 +4,7 @@ import path from 'path';
 import fs from 'fs';
 import { PrismaClient } from '@prisma/client';
 import authMiddleware from '../middleware/auth.js';
+import { recalculateOverallProjectRisks } from './projects.js';
 
 const router = express.Router();
 const prisma = new PrismaClient();
@@ -182,6 +183,9 @@ router.post('/:documentId/analyze', authMiddleware, async (req, res) => {
         procurementSignals: JSON.stringify(report.procurement_signals)
       }
     });
+
+    // Recalculate overall integrated project risk
+    await recalculateOverallProjectRisks(prisma);
 
     // Log the audit action
     await prisma.auditLog.create({

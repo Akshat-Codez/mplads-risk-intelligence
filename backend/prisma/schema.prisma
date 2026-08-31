@@ -249,18 +249,30 @@ model AuditLog {
   timestamp DateTime @default(now())
 }
 
-// ─── Model Versioning ────────────────────────────────
+// ─── Model Versioning & Registry ─────────────────────
 
 model ModelVersion {
-  id              String   @id @default(uuid())
-  version         String
-  modelType       String
-  trainingDate    DateTime?
-  datasetVersion  String?
-  metrics         String?  // JSON
-  config          String?  // JSON
-  isActive        Boolean  @default(false)
-  createdAt       DateTime @default(now())
+  id                String    @id @default(uuid())
+  name              String    @default("NIRMAN Risk Model")
+  version           String    @unique
+  algorithm         String    @default("Ensemble (Statistical + IF + NLP + Rule)")
+  modelType         String    @default("HYBRID_UNSUPERVISED") // HYBRID_UNSUPERVISED | SUPERVISED_BINARY | SUPERVISED_MULTICLASS
+  status            String    @default("PRODUCTION") // TRAINING | EVALUATION | CANDIDATE | APPROVED | REJECTED | PRODUCTION
+  datasetVersion    String?   @default("master_features_v1.0")
+  featureVersion    String?   @default("features_v1.0")
+  trainingDate      DateTime? @default(now())
+  metrics           String?   // JSON object: { precision, recall, f1, fpr, rocAuc, confusionMatrix }
+  config            String?   // JSON object: hyperparameters, feature list, weights
+  f1Score           Float?
+  precision         Float?
+  recall            Float?
+  falsePositiveRate Float?
+  rocAuc            Float?
+  confusionMatrix   String?   // JSON string
+  isActive          Boolean   @default(false)
+  approvedAt        DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @default(now()) @updatedAt
 }
 
 model Anomaly {

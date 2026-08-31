@@ -13,8 +13,21 @@ export const ProjectDetail: React.FC = () => {
   const [investigationNotes, setInvestigationNotes] = useState("");
 
   const [procurementDoc, setProcurementDoc] = useState<any>(null);
+  const [aiProjectSummary, setAiProjectSummary] = useState<any>(null);
+  const [feedbackHistory, setFeedbackHistory] = useState<any[]>([]);
+  const [selectedDecision, setSelectedDecision] = useState<string>('CONFIRMED');
+  const [feedbackReason, setFeedbackReason] = useState<string>('');
+  const [submittingFeedback, setSubmittingFeedback] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
+
+  const fetchFeedbackHistory = async () => {
+    try {
+      const encodedId = encodeURIComponent(id || "");
+      const res = await api.get(`/projects/${encodedId}/feedback`);
+      setFeedbackHistory(res.data || []);
+    } catch (e) {}
+  };
 
   useEffect(() => {
     const fetchProject = async () => {
@@ -22,16 +35,23 @@ export const ProjectDetail: React.FC = () => {
         const encodedId = encodeURIComponent(id || "");
         const res = await api.get(`/projects/${encodedId}`);
         setProject(res.data);
-        setInvestigationStatus(res.data.investigation_info.status);
-        setInvestigationNotes(res.data.investigation_info.notes);
+        setInvestigationStatus(res.data.investigation_info?.status || 'Unreviewed');
+        setInvestigationNotes(res.data.investigation_info?.notes || '');
 
         // Fetch associated procurement document if any
         try {
           const procRes = await api.get(`/procurement/${encodedId}`);
           setProcurementDoc(procRes.data);
-        } catch (procErr) {
-          console.error("Error fetching procurement:", procErr);
-        }
+        } catch (procErr) {}
+
+        // Fetch AI Project Summary
+        try {
+          const aiRes = await api.get(`/ai/project/${encodedId}/summary`);
+          setAiProjectSummary(aiRes.data);
+        } catch (aiErr) {}
+
+        // Fetch Verification Feedback History
+        await fetchFeedbackHistory();
       } catch (err) {
         console.error(err);
       } finally {
@@ -40,6 +60,31 @@ export const ProjectDetail: React.FC = () => {
     };
     if (id) fetchProject();
   }, [id]);
+
+  const handleSubmitFeedback = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!feedbackReason || feedbackReason.trim().length < 5) {
+      alert('Please provide a justification reason of at least 5 characters.');
+      return;
+    }
+
+    setSubmittingFeedback(true);
+    try {
+      const encodedId = encodeURIComponent(id || "");
+      await api.post(`/projects/${encodedId}/feedback`, {
+        decision: selectedDecision,
+        reason: feedbackReason.trim(),
+        modelType: 'OVERALL'
+      });
+      alert(`Official verification recorded: ${selectedDecision}`);
+      setFeedbackReason('');
+      await fetchFeedbackHistory();
+    } catch (err: any) {
+      alert(err.response?.data?.error || 'Failed to submit verification feedback');
+    } finally {
+      setSubmittingFeedback(false);
+    }
+  };
 
   const handleUpdateInvestigation = async () => {
     try {
@@ -164,6 +209,28 @@ export const ProjectDetail: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* AI Officer Project Intelligence Briefing Card */}
+      {aiProjectSummary && (
+        <div className="bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 rounded-2xl p-6 text-white shadow-xl border border-indigo-500/20 space-y-4">
+          <div className="flex justify-between items-center border-b border-indigo-800/40 pb-3">
+            <div className="flex items-center space-x-2.5">
+              <span className="p-1.5 bg-indigo-600/40 rounded-lg border border-indigo-400/30 text-indigo-300">✨</span>
+              <div>
+                <h3 className="text-base font-bold text-white">AI Officer Risk Intelligence Briefing</h3>
+                <p className="text-[11px] text-indigo-200/80">Cross-verified structured intelligence for administrative review</p>
+              </div>
+            </div>
+            <span className="text-[10px] bg-indigo-500/30 text-indigo-300 border border-indigo-400/30 px-2.5 py-0.5 rounded-full font-bold uppercase">
+              Confidence: {aiProjectSummary.structuredData?.confidence}%
+            </span>
+          </div>
+
+          <div className="bg-black/30 border border-indigo-500/20 rounded-xl p-5 text-xs text-indigo-100/90 leading-relaxed font-sans whitespace-pre-wrap">
+            {aiProjectSummary.summaryMarkdown}
+          </div>
+        </div>
+      )}
 
       {/* Associated Contractor & Compatibility Card */}
       {project.vendorName && (
@@ -358,6 +425,146 @@ export const ProjectDetail: React.FC = () => {
             </div>
           </div>
         )}
+      </div>
+
+      {/* Official Human Verification & Feedback Section */}
+      <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-6">
+        <div className="flex justify-between items-start border-b pb-4">
+          <div>
+            <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+              <span>🏛️</span> Official Officer Human Verification & Decision
+            </h3>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Review AI intelligence findings and record official verification feedback for audit logging and model calibration.
+            </p>
+          </div>
+          <span className="text-[10px] font-bold px-2.5 py-1 rounded bg-slate-100 text-slate-700 uppercase tracking-wider">
+            Human-in-the-Loop Protocol
+          </span>
+        </div>
+
+        {/* Verification Summary Snapshot */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-50 p-4 rounded-xl border border-slate-200 text-xs">
+          <div>
+            <span className="text-slate-400 font-medium block">Overall Risk</span>
+            <span className="font-extrabold text-slate-900 text-base">{project.prototype_risk_score || project.riskScore}/100</span>
+            <span className={`block text-[10px] font-bold ${
+              project.risk_level === 'HIGH' ? 'text-red-600' :
+              project.risk_level === 'MEDIUM' ? 'text-amber-600' :
+              project.risk_level === 'INSUFFICIENT DATA' ? 'text-slate-500' : 'text-green-600'
+            }`}>{project.risk_level || project.riskLevel}</span>
+          </div>
+          <div>
+            <span className="text-slate-400 font-medium block">Financial Risk</span>
+            <span className="font-extrabold text-slate-800 text-base">{project.financial_risk_score || 0}/100</span>
+            <span className="block text-[10px] text-slate-500 font-semibold">Statistical & IF</span>
+          </div>
+          <div>
+            <span className="text-slate-400 font-medium block">Procurement Risk</span>
+            <span className="font-extrabold text-slate-800 text-base">{procurementDoc?.procurement_risk_score ?? 'N/A'}</span>
+            <span className="block text-[10px] text-slate-500 font-semibold">{procurementDoc ? 'BOQ Audited' : 'No BOQ'}</span>
+          </div>
+          <div>
+            <span className="text-slate-400 font-medium block">Contractor Risk</span>
+            <span className="font-extrabold text-slate-800 text-base">{project.contractor_risk?.score ?? 'N/A'}</span>
+            <span className="block text-[10px] text-slate-500 font-semibold">{project.contractor_risk ? 'Profiled' : 'Unprofiled'}</span>
+          </div>
+        </div>
+
+        {/* Feedback Submission Form */}
+        <form onSubmit={handleSubmitFeedback} className="space-y-4">
+          <div>
+            <label className="block text-xs font-bold text-slate-700 mb-2">Select Officer Verification Decision:</label>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+              {[
+                { key: 'CONFIRMED', label: 'CONFIRMED', desc: 'Anomaly verified on-ground / records', color: 'border-red-500 bg-red-50 text-red-700', active: 'ring-2 ring-red-600 bg-red-100 font-extrabold' },
+                { key: 'FALSE_POSITIVE', label: 'FALSE POSITIVE', desc: 'Legitimate cost / false trigger', color: 'border-emerald-500 bg-emerald-50 text-emerald-700', active: 'ring-2 ring-emerald-600 bg-emerald-100 font-extrabold' },
+                { key: 'REQUIRES_INVESTIGATION', label: 'REQUIRES INVESTIGATION', desc: 'Needs field inspection / audit', color: 'border-blue-500 bg-blue-50 text-blue-700', active: 'ring-2 ring-blue-600 bg-blue-100 font-extrabold' },
+                { key: 'INSUFFICIENT_DATA', label: 'INSUFFICIENT DATA', desc: 'Missing docs / unverified', color: 'border-slate-400 bg-slate-50 text-slate-700', active: 'ring-2 ring-slate-600 bg-slate-200 font-extrabold' }
+              ].map(d => (
+                <button
+                  type="button"
+                  key={d.key}
+                  onClick={() => setSelectedDecision(d.key)}
+                  className={`p-3 rounded-xl border text-left transition ${d.color} ${selectedDecision === d.key ? d.active : 'opacity-80 hover:opacity-100'}`}
+                >
+                  <span className="block text-xs font-bold">{d.label}</span>
+                  <span className="block text-[10px] opacity-75 mt-0.5">{d.desc}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold text-slate-700 mb-1">
+              Officer Justification Reason & Verification Evidence <span className="text-red-500">*</span>
+            </label>
+            <textarea
+              rows={3}
+              value={feedbackReason}
+              onChange={(e) => setFeedbackReason(e.target.value)}
+              placeholder="State the verified ground evidence, measurement book details, or rationale for this decision..."
+              className="w-full bg-slate-50 border border-slate-300 rounded-xl p-3 text-xs text-slate-900 focus:ring-2 focus:ring-indigo-500 font-medium"
+              required
+            />
+          </div>
+
+          <div className="flex justify-end">
+            <button
+              type="submit"
+              disabled={submittingFeedback}
+              className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs px-5 py-2.5 rounded-xl shadow transition flex items-center space-x-2 disabled:opacity-50"
+            >
+              <span>{submittingFeedback ? 'Recording Decision...' : 'Submit Official Verification'}</span>
+            </button>
+          </div>
+        </form>
+
+        {/* Verification History & Audit Trail */}
+        <div className="border-t border-slate-200 pt-5 space-y-3">
+          <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
+            Verification History & Human Audit Trail ({feedbackHistory.length})
+          </h4>
+
+          {feedbackHistory.length === 0 ? (
+            <div className="p-4 bg-slate-50 border border-dashed border-slate-200 rounded-xl text-center text-xs text-slate-500">
+              No officer verification decisions recorded yet for this project.
+            </div>
+          ) : (
+            <div className="space-y-2.5">
+              {feedbackHistory.map((item: any, idx: number) => (
+                <div key={idx} className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-xs space-y-2">
+                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-1">
+                    <div className="flex items-center space-x-2">
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                        item.officerDecision === 'CONFIRMED' ? 'bg-red-100 text-red-700 border border-red-200' :
+                        item.officerDecision === 'FALSE_POSITIVE' ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' :
+                        item.officerDecision === 'REQUIRES_INVESTIGATION' ? 'bg-blue-100 text-blue-700 border border-blue-200' : 'bg-slate-200 text-slate-700 border border-slate-300'
+                      }`}>
+                        Decision: {item.officerDecision}
+                      </span>
+                      <span className="font-bold text-slate-800">
+                        {item.officer?.name || 'Officer'} ({item.officer?.role || 'Reviewer'})
+                      </span>
+                    </div>
+                    <span className="text-[10px] text-slate-400 font-mono">
+                      {new Date(item.createdAt).toLocaleString()}
+                    </span>
+                  </div>
+
+                  <p className="text-slate-700 font-medium italic bg-white p-2.5 rounded-lg border border-slate-200/60">
+                    "{item.reason}"
+                  </p>
+
+                  <div className="text-[10px] text-slate-500 flex flex-wrap gap-x-4 gap-y-1 pt-1 border-t border-slate-200/60 font-mono">
+                    <span>AI Score at Review: <strong>{item.overallRiskScore}/100</strong> ({item.riskLevel})</span>
+                    <span>Model: {item.modelVersion || 'v1.0-nirman-ensemble'}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-4">

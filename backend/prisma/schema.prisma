@@ -188,13 +188,19 @@ model Feedback {
   id               String   @id @default(uuid())
   projectId        String
   project          Project  @relation(fields: [projectId], references: [id])
-  modelType        String   // FINANCIAL | PROCUREMENT | CONTRACTOR | OVERALL
-  prediction       String?  // JSON: { riskScore, riskLevel, signals }
+  modelVersion     String   @default("v1.0-nirman-ensemble")
+  overallRiskScore Float    @default(0)
+  riskLevel        String   @default("LOW")
+  aiPrediction     String?  // JSON string: preserves exact state of AI findings, scores, and signals at review time
+  modelType        String   @default("OVERALL") // FINANCIAL | PROCUREMENT | CONTRACTOR | OVERALL
+  prediction       String?  // legacy alias
   officerDecision  String   // CONFIRMED | FALSE_POSITIVE | REQUIRES_INVESTIGATION | INSUFFICIENT_DATA
-  decisionReason   String?
+  decisionReason   String?  // legacy alias
+  reason           String?  // officer justification / verification evidence
   createdById      String
   createdBy        User     @relation(fields: [createdById], references: [id])
   createdAt        DateTime @default(now())
+  updatedAt        DateTime @default(now()) @updatedAt
 }
 
 // ─── Cases & Investigation ───────────────────────────

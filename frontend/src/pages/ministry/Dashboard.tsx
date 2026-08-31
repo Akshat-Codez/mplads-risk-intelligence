@@ -10,6 +10,7 @@ export const Dashboard: React.FC = () => {
   const [datasetInfo, setDatasetInfo] = useState<any>(null);
   const [highRiskWorks, setHighRiskWorks] = useState<any[]>([]);
   const [aiSummary, setAiSummary] = useState<any>(null);
+  const [feedbackMetrics, setFeedbackMetrics] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
 
@@ -23,14 +24,16 @@ export const Dashboard: React.FC = () => {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [statsRes, infoRes, aiRes] = await Promise.all([
+        const [statsRes, infoRes, aiRes, fbRes] = await Promise.all([
           api.get('/dashboard/summary'),
           api.get('/dashboard/dataset-info'),
-          api.get('/ai/summary').catch(() => ({ data: null }))
+          api.get('/ai/summary').catch(() => ({ data: null })),
+          api.get('/feedback/metrics').catch(() => ({ data: null }))
         ]);
         setStats(statsRes.data);
         setDatasetInfo(infoRes.data);
         setAiSummary(aiRes?.data || null);
+        setFeedbackMetrics(fbRes?.data || null);
         await fetchWorks();
       } catch (err) {
         console.error("Failed to fetch dashboard data", err);
@@ -221,6 +224,46 @@ export const Dashboard: React.FC = () => {
           )}
         </div>
       </div>
+
+      {/* Human Officer Verification Metrics Widget */}
+      {feedbackMetrics && (
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 space-y-3">
+          <div className="flex justify-between items-center border-b pb-2.5">
+            <div>
+              <h3 className="text-sm font-bold text-slate-900 flex items-center gap-1.5">
+                <span>🛡️</span> HUMAN-IN-THE-LOOP VERIFICATION AUDIT TRAIL
+              </h3>
+              <p className="text-[11px] text-slate-500">Official field inspections and desk verification records submitted by authorized officers</p>
+            </div>
+            <span className="text-xs font-semibold text-slate-700 bg-slate-100 px-3 py-1 rounded-full">
+              {feedbackMetrics.reviewedProjectsCount} Distinct Works Verified
+            </span>
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+            <div className="bg-slate-50 border border-slate-200 p-3 rounded-xl">
+              <span className="text-[10px] text-slate-500 font-bold uppercase block">Total Reviews</span>
+              <p className="text-lg font-extrabold text-slate-900 mt-0.5">{feedbackMetrics.totalReviews}</p>
+            </div>
+            <div className="bg-red-50/60 border border-red-200 p-3 rounded-xl">
+              <span className="text-[10px] text-red-700 font-bold uppercase block">Confirmed</span>
+              <p className="text-lg font-extrabold text-red-700 mt-0.5">{feedbackMetrics.confirmedCount}</p>
+            </div>
+            <div className="bg-emerald-50/60 border border-emerald-200 p-3 rounded-xl">
+              <span className="text-[10px] text-emerald-700 font-bold uppercase block">False Positives</span>
+              <p className="text-lg font-extrabold text-emerald-700 mt-0.5">{feedbackMetrics.falsePositiveCount}</p>
+            </div>
+            <div className="bg-blue-50/60 border border-blue-200 p-3 rounded-xl">
+              <span className="text-[10px] text-blue-700 font-bold uppercase block">Under Investigation</span>
+              <p className="text-lg font-extrabold text-blue-700 mt-0.5">{feedbackMetrics.requiresInvestigationCount}</p>
+            </div>
+            <div className="bg-slate-100 border border-slate-300 p-3 rounded-xl col-span-2 sm:col-span-1">
+              <span className="text-[10px] text-slate-600 font-bold uppercase block">Insufficient Data</span>
+              <p className="text-lg font-extrabold text-slate-700 mt-0.5">{feedbackMetrics.insufficientDataCount}</p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* KPI Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

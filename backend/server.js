@@ -11,6 +11,7 @@ import dashboardRoutes from './routes/dashboard.js';
 import procurementRoutes from './routes/procurement.js';
 import contractorRoutes from './routes/contractors.js';
 import aiSummaryRoutes from './routes/aiSummary.js';
+import feedbackRoutes from './routes/feedback.js';
 import authMiddleware from './middleware/auth.js';
 
 dotenv.config();
@@ -29,6 +30,8 @@ app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/procurement', procurementRoutes);
 app.use('/api/contractors', contractorRoutes);
 app.use('/api/ai', aiSummaryRoutes);
+app.use('/api/feedback', feedbackRoutes);
+app.use('/api', feedbackRoutes); // for /api/projects/:projectId/feedback
 
 
 // Health Check

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import axios from 'axios';
+import api from '../services/api';
 import { ArrowLeft, BriefcasePlus } from '../components/common/Icons';
 
 export const ProjectDetail: React.FC = () => {
@@ -12,14 +12,26 @@ export const ProjectDetail: React.FC = () => {
   const [investigationStatus, setInvestigationStatus] = useState("Unreviewed");
   const [investigationNotes, setInvestigationNotes] = useState("");
 
+  const [procurementDoc, setProcurementDoc] = useState<any>(null);
+  const [uploading, setUploading] = useState(false);
+  const [analyzing, setAnalyzing] = useState(false);
+
   useEffect(() => {
     const fetchProject = async () => {
       try {
         const encodedId = encodeURIComponent(id || "");
-        const res = await axios.get(`http://localhost:8000/api/works/${encodedId}`);
+        const res = await api.get(`/projects/${encodedId}`);
         setProject(res.data);
         setInvestigationStatus(res.data.investigation_info.status);
         setInvestigationNotes(res.data.investigation_info.notes);
+
+        // Fetch associated procurement document if any
+        try {
+          const procRes = await api.get(`/procurement/${encodedId}`);
+          setProcurementDoc(procRes.data);
+        } catch (procErr) {
+          console.error("Error fetching procurement:", procErr);
+        }
       } catch (err) {
         console.error(err);
       } finally {
@@ -32,17 +44,57 @@ export const ProjectDetail: React.FC = () => {
   const handleUpdateInvestigation = async () => {
     try {
       const encodedId = encodeURIComponent(id || "");
-      await axios.post(`http://localhost:8000/api/works/${encodedId}/investigate`, {
+      await api.post(`/projects/${encodedId}/investigate`, {
         status: investigationStatus,
         notes: investigationNotes
       });
       setShowCaseModal(false);
       alert('Investigation updated successfully!');
       // Refresh
-      const res = await axios.get(`http://localhost:8000/api/works/${encodedId}`);
+      const res = await api.get(`/projects/${encodedId}`);
       setProject(res.data);
     } catch (err) {
       alert("Failed to update investigation");
+    }
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('projectId', project.id);
+
+    setUploading(true);
+    try {
+      const res = await api.post('/procurement/upload', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      alert('Tender/BOQ PDF uploaded successfully! Beginning extraction & risk comparison...');
+      // Trigger analysis immediately
+      await handleAnalyze(res.data.documentId);
+    } catch (err: any) {
+      alert(err.response?.data?.error || 'Failed to upload PDF');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleAnalyze = async (documentId: string) => {
+    setAnalyzing(true);
+    try {
+      const res = await api.post(`/procurement/${documentId}/analyze`);
+      setProcurementDoc(res.data.data);
+      alert('Procurement analysis completed successfully!');
+      // Refresh project to get updated overall metrics
+      const encodedId = encodeURIComponent(id || "");
+      const projRes = await api.get(`/projects/${encodedId}`);
+      setProject(projRes.data);
+    } catch (err: any) {
+      alert(err.response?.data?.error || 'Failed to run analysis');
+    } finally {
+      setAnalyzing(false);
     }
   };
 
@@ -125,6 +177,145 @@ export const ProjectDetail: React.FC = () => {
               </ul>
             </div>
         </div>
+      </div>
+
+      {/* Procurement Intelligence Card */}
+      <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-4">
+        <div className="flex justify-between items-center border-b pb-3">
+          <h3 className="text-base font-bold text-slate-900">Procurement & BOQ Audit Intelligence</h3>
+          
+          {/* Upload Button */}
+          <div>
+            <label className="bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs px-4 py-2 rounded-lg shadow cursor-pointer transition inline-block">
+              {uploading ? 'Uploading PDF...' : analyzing ? 'Running AI Extraction...' : 'Upload Tender / BOQ PDF'}
+              <input 
+                type="file" 
+                accept=".pdf" 
+                className="hidden" 
+                onChange={handleFileUpload} 
+                disabled={uploading || analyzing}
+              />
+            </label>
+          </div>
+        </div>
+
+        {analyzing && (
+          <div className="p-8 text-center text-slate-600 font-semibold space-y-3">
+            <div className="animate-spin inline-block w-8 h-8 border-[3px] border-current border-t-transparent text-blue-600 rounded-full" role="status" aria-label="loading"></div>
+            <p>Running LLM text extraction & price benchmark audit (CPWD SSR)...</p>
+          </div>
+        )}
+
+        {!analyzing && !procurementDoc && (
+          <div className="p-8 text-center border-2 border-dashed border-slate-200 rounded-xl text-slate-500 text-xs">
+            No tender/BOQ document uploaded yet. Upload a PDF tender to parse items and compare against standard schedule of rates.
+          </div>
+        )}
+
+        {!analyzing && procurementDoc && (
+          <div className="space-y-4">
+            {/* Meta Information */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200 text-xs">
+              <div>
+                <span className="text-slate-400 font-medium">Tender Number</span>
+                <p className="font-bold text-slate-800">{procurementDoc.tender_number || 'N/A'}</p>
+              </div>
+              <div>
+                <span className="text-slate-400 font-medium">Contractor / Vendor</span>
+                <p className="font-bold text-slate-800">{procurementDoc.contractor_vendor || 'N/A'}</p>
+              </div>
+              <div>
+                <span className="text-slate-400 font-medium">Issuing Authority</span>
+                <p className="font-bold text-slate-800">{procurementDoc.issuing_authority || 'N/A'}</p>
+              </div>
+              <div>
+                <span className="text-slate-400 font-medium">Tender Date</span>
+                <p className="font-bold text-slate-800">{procurementDoc.tender_date || 'N/A'}</p>
+              </div>
+              <div>
+                <span className="text-slate-400 font-medium">Total Estimated Value</span>
+                <p className="font-bold text-slate-800">₹{(procurementDoc.total_estimated_value || 0).toLocaleString()}</p>
+              </div>
+              <div>
+                <span className="text-slate-400 font-medium">Total Quoted Value</span>
+                <p className="font-bold text-slate-800">₹{(procurementDoc.total_quoted_value || 0).toLocaleString()}</p>
+              </div>
+              <div>
+                <span className="text-slate-400 font-medium">Status</span>
+                <p className="font-bold text-blue-600">{procurementDoc.status || 'Analyzed'}</p>
+              </div>
+              <div>
+                <span className="text-slate-400 font-medium">Extraction Mode</span>
+                <p className="font-bold text-slate-800">{procurementDoc.extraction_method || 'DIGITAL'}</p>
+              </div>
+            </div>
+
+            {/* Score & Signals */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="bg-slate-50 border border-slate-200 p-4 rounded-xl text-center flex flex-col items-center justify-center">
+                <span className="text-[10px] text-slate-600 font-bold uppercase tracking-wider">Procurement Risk Score</span>
+                <h2 className="text-3xl font-extrabold text-slate-900 mt-0.5">{procurementDoc.procurement_risk_score} <span className="text-sm font-normal text-slate-500">/ 100</span></h2>
+                <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full inline-block mt-2 ${procurementDoc.procurement_risk_level === 'HIGH' ? 'bg-red-100 text-red-700' : procurementDoc.procurement_risk_level === 'REQUIRES REVIEW' ? 'bg-amber-100 text-amber-700' : 'bg-green-100 text-green-700'}`}>
+                  {procurementDoc.procurement_risk_level}
+                </span>
+              </div>
+
+              <div className="md:col-span-2 bg-slate-50 border border-slate-200 p-4 rounded-xl text-xs space-y-2">
+                <span className="font-bold text-slate-700 block">Procurement Risk Signals</span>
+                {project.procurementSignals || project.procurement_signals ? (
+                  <ul className="list-disc pl-5 space-y-1 text-slate-600 font-medium">
+                    {JSON.parse(project.procurementSignals || project.procurement_signals).map((signal: string, i: number) => (
+                      <li key={i}>{signal}</li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-slate-400 font-medium">No procurement anomalies or warnings identified.</p>
+                )}
+              </div>
+            </div>
+
+            {/* Items Table */}
+            <div className="border border-slate-200 rounded-xl overflow-hidden">
+              <div className="bg-slate-50 p-3 border-b border-slate-200 text-xs font-bold text-slate-700 flex flex-col sm:flex-row justify-between gap-2">
+                <span>Extracted Bill of Quantities (BOQ) Items</span>
+                <span className="text-[10px] text-amber-600 font-bold">Benchmark source: Demo/Synthetic reference dataset</span>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs text-left text-slate-600">
+                  <thead className="bg-slate-100 text-slate-700 uppercase font-bold text-[10px]">
+                    <tr>
+                      <th className="px-4 py-2">Item Name & Specs</th>
+                      <th className="px-4 py-2 text-right">Quantity</th>
+                      <th className="px-4 py-2 text-right">Estimated Price</th>
+                      <th className="px-4 py-2 text-right">Quoted Price</th>
+                      <th className="px-4 py-2 text-right">Ref Price (Benchmark)</th>
+                      <th className="px-4 py-2 text-right">Deviation %</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {procurementDoc.items && procurementDoc.items.map((item: any, i: number) => (
+                      <tr key={i} className="hover:bg-slate-50/50">
+                        <td className="px-4 py-3">
+                          <span className="font-bold text-slate-800 block">{item.item_name}</span>
+                          <span className="text-[10px] text-slate-400 block max-w-md truncate">{item.description}</span>
+                        </td>
+                        <td className="px-4 py-3 text-right font-mono">{item.quantity} {item.unit}</td>
+                        <td className="px-4 py-3 text-right font-mono">{item.estimated_price ? `₹${item.estimated_price}` : 'N/A'}</td>
+                        <td className="px-4 py-3 text-right font-mono font-bold text-slate-800">₹{item.quoted_price}</td>
+                        <td className="px-4 py-3 text-right font-mono">
+                          {item.reference_price ? `₹${item.reference_price}` : 'Benchmark unavailable'}
+                        </td>
+                        <td className={`px-4 py-3 text-right font-mono font-bold ${item.deviation_percentage > 20 ? 'text-red-600' : 'text-green-600'}`}>
+                          {item.deviation_percentage !== null ? `${item.deviation_percentage > 0 ? '+' : ''}${item.deviation_percentage}%` : 'N/A'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-4">

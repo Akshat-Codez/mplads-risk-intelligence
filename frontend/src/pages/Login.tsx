@@ -14,18 +14,30 @@ export const Login: React.FC = () => {
   const [captchaInput, setCaptchaInput] = useState('');
   const [selectedRole, setSelectedRole] = useState<Role>(initialRole);
   
+  const [error, setError] = useState<string | null>(null);
+  
   const { login } = useAuth();
   const navigate = useNavigate();
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    login(username, selectedRole);
-    navigate('/app');
+    setError(null);
+    try {
+      await login(username, selectedRole);
+      navigate('/app');
+    } catch (err: any) {
+      setError(err.message || 'Login failed. Please check credentials.');
+    }
   };
 
-  const handleDemoMode = (demoRole: Role) => {
-    login(`DEMO-${demoRole}-2026`, demoRole);
-    navigate('/app');
+  const handleDemoMode = async (demoRole: Role) => {
+    setError(null);
+    try {
+      await login(`DEMO-${demoRole}-2026`, demoRole);
+      navigate('/app');
+    } catch (err: any) {
+      setError('Demo login failed. Make sure server is running.');
+    }
   };
 
   return (
@@ -67,6 +79,12 @@ export const Login: React.FC = () => {
             </div>
             <h2 className="text-2xl font-black text-slate-900 font-serif pt-2 border-t border-slate-200">Log In</h2>
           </div>
+
+          {error && (
+            <div className="bg-red-50 text-red-600 border border-red-200 text-xs px-3 py-2 rounded-lg font-bold text-center">
+              ⚠️ {error}
+            </div>
+          )}
 
           {/* Form */}
           <form onSubmit={handleLogin} className="space-y-4 text-xs">

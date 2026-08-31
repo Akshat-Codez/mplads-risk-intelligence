@@ -1,40 +1,13 @@
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider = "sqlite"
+  url      = "file:./dev.db"
 }
 
 generator client {
   provider = "prisma-client-js"
 }
 
-enum Role {
-  MINISTER
-  MINISTRY
-  STATE
-  DISTRICT
-}
-
-enum RiskLevel {
-  LOW
-  MODERATE
-  HIGH
-  CRITICAL
-}
-
-enum CaseStatus {
-  OPEN
-  UNDER_REVIEW
-  ESCALATED
-  RESOLVED
-  DISMISSED
-}
-
-enum Priority {
-  LOW
-  MEDIUM
-  HIGH
-  CRITICAL
-}
+// ─── Auth & Roles ───────────────────────────────────
 
 model User {
   id           String        @id @default(uuid())
@@ -42,101 +15,194 @@ model User {
   name         String
   email        String        @unique
   passwordHash String
-  role         Role
+  role         String        @default("DISTRICT")
   state        String?       @default("All India")
   district     String?       @default("All Districts")
   createdCases Case[]        @relation("CreatedBy")
   actions      CaseAction[]
   auditLogs    AuditLog[]
+  feedback     Feedback[]
   createdAt    DateTime      @default(now())
 }
 
-model MP {
-  id           String    @id @default(uuid())
-  name         String
-  house        String    // Lok Sabha / Rajya Sabha
-  constituency String
-  state        String
-  projects     Project[]
-}
-
-model Vendor {
-  id               String    @id @default(uuid())
-  vendorId         String    @unique
-  name             String
-  gstin            String?
-  totalProjects    Int       @default(0)
-  totalExpenditure Float     @default(0.0)
-  riskLevel        RiskLevel @default(LOW)
-  projects         Project[]
-}
+// ─── MPLADS Project (matches master_dataset_scored.csv) ───
 
 model Project {
-  id                  String          @id @default(uuid())
-  projectId           String          @unique
-  workTitle           String
-  category            String
-  state               String
-  district            String
-  constituency        String
-  mpId                String
-  mp                  MP              @relation(fields: [mpId], references: [id])
-  implementingAgency  String
-  vendorId            String?
-  vendor              Vendor?         @relation(fields: [vendorId], references: [id])
-  recommendedAmount   Float
-  sanctionedAmount    Float
-  actualExpenditure   Float           @default(0.0)
-  recommendationDate  DateTime
-  sanctionDate        DateTime?
-  targetCompletionDate DateTime?
-  actualCompletionDate DateTime?
-  status              String
-  riskScore           Float           @default(0.0)
-  riskLevel           RiskLevel       @default(LOW)
-  regLatitude         Float?
-  regLongitude        Float?
-  evidenceLatitude    Float?
-  evidenceLongitude   Float?
-  gpsDistanceMeters   Float?
-  beforePhotoUrl      String?
-  afterPhotoUrl       String?
-  photoHash           String?
-  anomalies           Anomaly[]
-  cases               Case[]
-  auditLogs           AuditLog[]
-  createdAt           DateTime        @default(now())
+  id                      String     @id @default(uuid())
+  projectId               String     @unique       // work_id from CSV
+
+  // Descriptive
+  workType                String?
+  workDescription         String?
+  state                   String?
+  district                String?
+  constituency            String?
+  mpName                  String?
+
+  // Financial
+  recommendedAmount       Float?
+  sanctionedAmount        Float?
+  totalDisbursed          Float?
+  expenditureRatio        Float?
+  amountDeviation         Float?
+  finalCompletedAmount    Float?
+
+  // Timeline
+  recommendationDate      String?
+  sanctionDate            String?
+  actualCompletionDate    String?
+  sanctionDelayDays       Float?
+  completionDurationDays  Float?
+  workStatus              String?
+
+  // Payments
+  paymentCount            Float?
+  averagePayment          Float?
+  maximumPayment          Float?
+  firstPaymentDate        String?
+  lastPaymentDate         String?
+  paymentDurationDays     Float?
+
+  // Vendor
+  vendorName              String?
+  vendorCountPerWork      Int?
+
+  // Risk Scores (from ML pipeline)
+  riskScore               Float      @default(0)
+  riskLevel               String     @default("LOW")
+  riskComponents          String?    // JSON string: {"financial":0,"ml":0,...}
+  structuredReasons       String?    // JSON string: [{type,evidence,...}]
+  riskEvidenceExplanation String?
+  aiJustificationSummary  String?
+
+  // Module Specific Risk Scores & Signals
+  financialRiskScore      Float?     @default(0)
+  financialRiskLevel      String?    @default("LOW")
+  financialSignals        String?    // JSON string
+  anomalyScore            Float?     @default(0)
+
+  procurementRiskScore    Float?     @default(0)
+  procurementRiskLevel    String?    @default("LOW")
+  procurementSignals      String?    // JSON string
+
+  contractorRiskScore     Float?     @default(0)
+  contractorRiskLevel     String?    @default("LOW")
+  contractorSignals       String?    // JSON string
+
+  // ML Signals
+  peerMedianAmount        Float?
+  peerDeviation           Float?
+  ifAnomalySignal         Boolean    @default(false)
+  similarWorkDetected     Boolean    @default(false)
+  similarWorkId           String?
+
+  // Metadata
+  imageAvailable          Boolean    @default(false)
+  dataSource              String     @default("MPLADS_ESAKSHI")
+
+  // Relations
+  procurements            Procurement[]
+  cases                   Case[]
+  auditLogs               AuditLog[]
+  feedback                Feedback[]
+  anomalies               Anomaly[]
+
+  createdAt               DateTime   @default(now())
+  updatedAt               DateTime   @updatedAt
 }
 
-model Anomaly {
-  id            String    @id @default(uuid())
-  projectId     String
-  project       Project   @relation(fields: [projectId], references: [id])
-  anomalyType   String
-  severity      RiskLevel
-  scoreContribution Float
-  title         String
-  explanation   String
-  supportingMetric String
-  createdAt     DateTime  @default(now())
+// ─── Procurement Intelligence ────────────────────────
+
+model Procurement {
+  id                  String   @id @default(uuid())
+  projectId           String
+  project             Project  @relation(fields: [projectId], references: [id])
+  uploadedFile        String?
+  extractedText       String?
+  extractionMethod    String?  // DIGITAL | OCR
+  items               String?  // JSON array of extracted items
+  procurementRiskScore Float?
+  procurementRiskLevel String?
+  summary             String?
+  status              String?  // Uploaded | Analyzed | Error
+  
+  // Extracted Metadata
+  tenderNumber        String?
+  projectName         String?
+  issuingAuthority    String?
+  contractorVendor    String?
+  tenderDate          String?
+  totalEstimatedValue Float?
+  totalQuotedValue    Float?
+  
+  createdAt           DateTime @default(now())
 }
+
+// ─── Contractor (aggregated from vendor data) ────────
+
+model Contractor {
+  id                 String   @id @default(uuid())
+  name               String
+  normalizedName     String   @unique
+  projectCount       Int      @default(0)
+  totalExpenditure   Float    @default(0)
+  averageProjectValue Float?
+  districts          String?  // JSON array
+  workTypes          String?  // JSON array
+  concentrationScore Float?
+  riskLevel          String   @default("LOW")
+  isDemo             Boolean  @default(false)
+  createdAt          DateTime @default(now())
+}
+
+// ─── Reference Prices ────────────────────────────────
+
+model ReferencePrice {
+  id             String   @id @default(uuid())
+  item           String
+  specification  String?
+  unit           String?
+  region         String?
+  period         String?
+  referencePrice Float
+  source         String   // "CPWD SSR 2024" or "DEMO - synthetic benchmark"
+  isDemo         Boolean  @default(true)
+  createdAt      DateTime @default(now())
+}
+
+// ─── Human Feedback / Active Learning ────────────────
+
+model Feedback {
+  id               String   @id @default(uuid())
+  projectId        String
+  project          Project  @relation(fields: [projectId], references: [id])
+  modelType        String   // FINANCIAL | PROCUREMENT | CONTRACTOR | OVERALL
+  prediction       String?  // JSON: { riskScore, riskLevel, signals }
+  officerDecision  String   // CONFIRMED | FALSE_POSITIVE | REQUIRES_INVESTIGATION | INSUFFICIENT_DATA
+  decisionReason   String?
+  createdById      String
+  createdBy        User     @relation(fields: [createdById], references: [id])
+  createdAt        DateTime @default(now())
+}
+
+// ─── Cases & Investigation ───────────────────────────
 
 model Case {
-  id            String       @id @default(uuid())
-  caseNumber    String       @unique
-  projectId     String
-  project       Project      @relation(fields: [projectId], references: [id])
-  title         String
-  priority      Priority     @default(MEDIUM)
-  status        CaseStatus   @default(OPEN)
-  assignedRole  Role         @default(DISTRICT)
-  assignedState String?
+  id               String       @id @default(uuid())
+  caseNumber       String       @unique
+  projectId        String
+  project          Project      @relation(fields: [projectId], references: [id])
+  title            String
+  priority         String       @default("MEDIUM")
+  status           String       @default("OPEN")
+  assignedRole     String       @default("DISTRICT")
+  assignedState    String?
   assignedDistrict String?
-  createdById   String
-  createdBy     User         @relation("CreatedBy", fields: [createdById], references: [id])
-  actions       CaseAction[]
-  createdAt     DateTime     @default(now())
-  updatedAt     DateTime     @updatedAt
+  createdById      String
+  createdBy        User         @relation("CreatedBy", fields: [createdById], references: [id])
+  actions          CaseAction[]
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
 }
 
 model CaseAction {
@@ -150,6 +216,8 @@ model CaseAction {
   createdAt DateTime @default(now())
 }
 
+// ─── Audit Trail ─────────────────────────────────────
+
 model AuditLog {
   id        String   @id @default(uuid())
   userId    String?
@@ -161,4 +229,31 @@ model AuditLog {
   details   String
   ipAddress String?
   timestamp DateTime @default(now())
+}
+
+// ─── Model Versioning ────────────────────────────────
+
+model ModelVersion {
+  id              String   @id @default(uuid())
+  version         String
+  modelType       String
+  trainingDate    DateTime?
+  datasetVersion  String?
+  metrics         String?  // JSON
+  config          String?  // JSON
+  isActive        Boolean  @default(false)
+  createdAt       DateTime @default(now())
+}
+
+model Anomaly {
+  id                String   @id @default(uuid())
+  projectId         String
+  project           Project  @relation(fields: [projectId], references: [id])
+  anomalyType       String
+  severity          String   // e.g. LOW, MEDIUM, HIGH
+  scoreContribution Float
+  title             String
+  explanation       String
+  supportingMetric  String
+  createdAt         DateTime @default(now())
 }

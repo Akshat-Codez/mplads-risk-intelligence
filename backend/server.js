@@ -3,6 +3,15 @@ import cors from 'cors';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { PrismaClient } from '@prisma/client';
+import dotenv from 'dotenv';
+
+// Import Routes
+import projectRoutes from './routes/projects.js';
+import dashboardRoutes from './routes/dashboard.js';
+import procurementRoutes from './routes/procurement.js';
+import authMiddleware from './middleware/auth.js';
+
+dotenv.config();
 
 const app = express();
 const prisma = new PrismaClient();
@@ -11,6 +20,12 @@ const JWT_SECRET = process.env.JWT_SECRET || 'nirman-sih-2026-secret-key-gov-mos
 
 app.use(cors());
 app.use(express.json());
+
+// Mount Routes
+app.use('/api/projects', projectRoutes);
+app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/procurement', procurementRoutes);
+
 
 // Health Check
 app.get('/api/health', (req, res) => {
@@ -100,7 +115,7 @@ app.post('/api/auth/login', async (req, res) => {
           name: role === 'MINISTER' ? 'Honble Minister of State' : 
                 role === 'STATE' ? 'State Nodal Officer (UP)' :
                 role === 'DISTRICT' ? 'District Collector (Varanasi)' : 'National MoSPI Admin',
-          email: `${role ? role.toLowerCase() : 'user'}@gov.in`,
+          email: `${authorityId.toLowerCase().replace(/[^a-z0-9]/g, '')}@gov.in`,
           passwordHash,
           role: role ? role.toUpperCase() : 'MINISTRY',
           state: role === 'STATE' || role === 'DISTRICT' ? 'Uttar Pradesh' : 'All India',
@@ -168,6 +183,60 @@ app.get('/api/auth/me', async (req, res) => {
     });
   } catch (err) {
     res.status(401).json({ error: 'Invalid or expired token' });
+  }
+});
+
+// GET /api/audit-logs
+app.get('/api/audit-logs', authMiddleware, async (req, res) => {
+  try {
+    const logs = await prisma.auditLog.findMany({
+      include: {
+        user: {
+          select: {
+            name: true,
+            role: true
+          }
+        },
+        project: {
+          select: {
+            projectId: true
+          }
+        }
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 100
+    });
+    res.json(logs);
+  } catch (err) {
+    console.error('Audit logs fetch error:', err);
+    res.status(500).json({ error: 'Failed to retrieve audit logs' });
+  }
+});
+
+// GET /api/cases
+app.get('/api/cases', authMiddleware, async (req, res) => {
+  try {
+    const cases = await prisma.case.findMany({
+      include: {
+        project: true,
+        actions: {
+          include: {
+            user: {
+              select: {
+                name: true,
+                role: true
+              }
+            }
+          },
+          orderBy: { createdAt: 'desc' }
+        }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+    res.json(cases);
+  } catch (err) {
+    console.error('Cases fetch error:', err);
+    res.status(500).json({ error: 'Failed to retrieve cases' });
   }
 });
 

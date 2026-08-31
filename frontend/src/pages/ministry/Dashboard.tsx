@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import axios from 'axios';
+import api from '../../services/api';
 import { ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 
 export const Dashboard: React.FC = () => {
@@ -11,8 +11,8 @@ export const Dashboard: React.FC = () => {
 
   const fetchWorks = async () => {
     try {
-      const worksRes = await axios.get('http://localhost:8000/api/works?risk_level=HIGH');
-      setHighRiskWorks(worksRes.data);
+      const worksRes = await api.get('/projects?risk_level=HIGH');
+      setHighRiskWorks(Array.isArray(worksRes.data) ? worksRes.data : worksRes.data.projects || []);
     } catch (e) {}
   };
 
@@ -20,8 +20,8 @@ export const Dashboard: React.FC = () => {
     const fetchData = async () => {
       try {
         const [statsRes, infoRes] = await Promise.all([
-          axios.get('http://localhost:8000/api/dashboard/stats'),
-          axios.get('http://localhost:8000/api/dataset-info')
+          api.get('/dashboard/summary'),
+          api.get('/dashboard/dataset-info')
         ]);
         setStats(statsRes.data);
         setDatasetInfo(infoRes.data);
@@ -37,7 +37,7 @@ export const Dashboard: React.FC = () => {
 
   const handleUpdateInvestigation = async (workId: string, status: string) => {
     try {
-      await axios.post(`http://localhost:8000/api/works/${encodeURIComponent(workId)}/investigate`, {
+      await api.post(`/projects/${encodeURIComponent(workId)}/investigate`, {
         status: status,
         notes: ""
       });
@@ -51,7 +51,7 @@ export const Dashboard: React.FC = () => {
   if (loading) return <div className="p-8 text-center text-slate-500 font-bold">Loading Live Analytics...</div>;
 
   const RISK_PIE_DATA = [
-    { name: 'Low Risk', value: stats?.total_works - stats?.medium_risk_count - stats?.high_risk_count || 0, color: '#10B981' },
+    { name: 'Low Risk', value: stats?.low_risk_count || 0, color: '#10B981' },
     { name: 'Medium Risk', value: stats?.medium_risk_count || 0, color: '#F59E0B' },
     { name: 'High Risk', value: stats?.high_risk_count || 0, color: '#EF4444' }
   ];
@@ -68,11 +68,11 @@ export const Dashboard: React.FC = () => {
           onClick={async () => {
             setLoading(true);
             try {
-               await axios.post('http://localhost:8000/api/run_analysis');
+               await api.post('/projects/run-analysis');
                // Refresh the page data
                const [statsRes, infoRes] = await Promise.all([
-                 axios.get('http://localhost:8000/api/dashboard/stats'),
-                 axios.get('http://localhost:8000/api/dataset-info')
+                 api.get('/dashboard/summary'),
+                 api.get('/dashboard/dataset-info')
                ]);
                setStats(statsRes.data);
                setDatasetInfo(infoRes.data);

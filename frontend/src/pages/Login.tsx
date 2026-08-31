@@ -86,37 +86,28 @@ export const Login: React.FC = () => {
     <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4 font-sans">
       <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 max-w-5xl w-full overflow-hidden grid grid-cols-1 md:grid-cols-2">
         
-        {/* Left Side: Official Parliament Image Banner */}
-        <div className="relative bg-slate-900 text-white flex flex-col justify-between p-8 overflow-hidden min-h-[500px]">
-          <div className="absolute inset-0 bg-cover bg-center opacity-40" style={{ backgroundImage: "url('https://images.unsplash.com/photo-1541888946425-d0fbb186a5b7?w=800')" }} />
-          <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-900/60 to-transparent" />
+        {/* Left Side: Official Parliament / Leadership Image Banner */}
+        <div className="relative bg-slate-950 text-white flex flex-col justify-between p-8 overflow-hidden min-h-[500px]">
+          {/* Full Space Portrait Image */}
+          <img
+            src="https://tse4.mm.bing.net/th/id/OIP.evmb_tz_sypCxmQYEqEZCAAAAA?r=0&w=400&h=400&rs=1&pid=ImgDetMain&o=7&rm=3"
+            alt="Official Government Portal"
+            className="absolute inset-0 w-full h-full object-cover object-top"
+          />
+          {/* Subtle gradient overlay to ensure top badge and bottom typography remain crisp */}
+          <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/30 to-slate-950/70" />
 
           {/* Top Left Tag */}
           <div className="relative z-10">
-            <span className="bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[10px] font-extrabold px-3 py-1 rounded-full uppercase tracking-wider">
+            <span className="bg-amber-500/20 backdrop-blur-md text-amber-300 border border-amber-500/40 text-[10px] font-extrabold px-3 py-1 rounded-full uppercase tracking-wider shadow-md">
               🇮🇳 Official Government Portal
             </span>
           </div>
 
-          {/* Center Formal Portrait */}
-          <div className="relative z-10 flex flex-col items-center justify-center my-auto py-4">
-            <div className="relative">
-              <div className="absolute -inset-1 bg-gradient-to-r from-amber-500/30 via-slate-700/40 to-amber-500/30 rounded-full blur-sm opacity-80" />
-              <div className="relative w-36 h-36 sm:w-44 sm:h-44 rounded-full overflow-hidden border-2 border-amber-400/60 shadow-2xl bg-slate-950 ring-4 ring-slate-900/80">
-                <img
-                  src="https://tse4.mm.bing.net/th/id/OIP.evmb_tz_sypCxmQYEqEZCAAAAA?r=0&w=400&h=400&rs=1&pid=ImgDetMain&o=7&rm=3"
-                  alt="Official Portrait"
-                  className="w-full h-full object-cover object-top"
-                  loading="eager"
-                />
-              </div>
-            </div>
-          </div>
-
           {/* Bottom Left Title */}
-          <div className="relative z-10 space-y-2">
-            <h1 className="text-4xl font-black font-serif text-white tracking-tight">eSAKSHI</h1>
-            <p className="text-xs text-slate-300 font-medium leading-relaxed">
+          <div className="relative z-10 space-y-2 pt-32">
+            <h1 className="text-4xl font-black font-serif text-white tracking-tight drop-shadow-md">eSAKSHI</h1>
+            <p className="text-xs text-slate-200 font-medium leading-relaxed drop-shadow">
               SANsad sadasya sthaniya KSHetra vikas yojana <br />
               <span className="text-amber-400 font-semibold">(MPLADS Infrastructure Reporting & Analytics)</span>
             </p>

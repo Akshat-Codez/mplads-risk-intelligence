@@ -17,24 +17,15 @@ export const Login: React.FC = () => {
   const { login } = useAuth();
   const navigate = useNavigate();
 
-  const getDashboardPath = (targetRole: Role) => {
-    switch (targetRole) {
-      case 'MINISTER': return '/app/minister';
-      case 'STATE': return '/app/state';
-      case 'DISTRICT': return '/app/district';
-      case 'MINISTRY': default: return '/app/ministry';
-    }
-  };
-
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
     login(username, selectedRole);
-    navigate(getDashboardPath(selectedRole));
+    navigate('/app');
   };
 
   const handleDemoMode = (demoRole: Role) => {
     login(`DEMO-${demoRole}-2026`, demoRole);
-    navigate(getDashboardPath(demoRole));
+    navigate('/app');
   };
 
   return (

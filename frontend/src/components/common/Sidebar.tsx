@@ -11,7 +11,9 @@ import {
   History, 
   Database,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  MapPin,
+  Camera
 } from './Icons';
 import { useAuth } from '../../context/AuthContext';
 import { Role } from '../../types';
@@ -25,11 +27,15 @@ interface NavItem {
 const NAV_BY_ROLE: Record<Role, NavItem[]> = {
   MINISTER: [
     { label: 'Executive Overview', path: '/app/minister', icon: BarChart3 },
+    { label: 'GIS Corruption Map', path: '/app/gis-analytics', icon: MapPin },
+    { label: 'Geofence Inspector', path: '/app/geofence-inspector', icon: Camera },
     { label: 'MP Projects Explorer', path: '/app/projects', icon: FolderKanban },
     { label: 'National Analytics', path: '/app/analytics', icon: PieChart }
   ],
   MINISTRY: [
     { label: 'National Overview', path: '/app/ministry', icon: BarChart3 },
+    { label: 'GIS Corruption Map', path: '/app/gis-analytics', icon: MapPin },
+    { label: 'Geofence EXIF Inspector', path: '/app/geofence-inspector', icon: Camera },
     { label: 'Projects Explorer', path: '/app/projects', icon: FolderKanban },
     { label: 'Risk Intelligence', path: '/app/risk-intelligence', icon: ShieldAlert },
     { label: 'Vendors & Cartels', path: '/app/vendors', icon: Building2 },
@@ -41,6 +47,8 @@ const NAV_BY_ROLE: Record<Role, NavItem[]> = {
   ],
   STATE: [
     { label: 'State Overview', path: '/app/state', icon: BarChart3 },
+    { label: 'State GIS Map', path: '/app/gis-analytics', icon: MapPin },
+    { label: 'Geofence Inspector', path: '/app/geofence-inspector', icon: Camera },
     { label: 'District Projects', path: '/app/projects', icon: FolderKanban },
     { label: 'Escalated Cases', path: '/app/investigations', icon: Briefcase },
     { label: 'Vendor Cartels', path: '/app/vendors', icon: Building2 },
@@ -49,6 +57,8 @@ const NAV_BY_ROLE: Record<Role, NavItem[]> = {
   ],
   DISTRICT: [
     { label: 'District Action Hub', path: '/app/district', icon: BarChart3 },
+    { label: 'District GIS Map', path: '/app/gis-analytics', icon: MapPin },
+    { label: 'Geofence EXIF Inspector', path: '/app/geofence-inspector', icon: Camera },
     { label: 'Local Works Queue', path: '/app/projects', icon: FolderKanban },
     { label: 'Field Audits', path: '/app/investigations', icon: Briefcase },
     { label: 'Notifications', path: '/app/notifications', icon: Bell }
@@ -67,7 +77,7 @@ export const Sidebar: React.FC = () => {
         collapsed ? 'w-20' : 'w-64'
       }`}
     >
-      {/* Brand Header (Clean Navy Text Branding without Emblem) */}
+      {/* Brand Header */}
       <div>
         <div className="p-4 flex items-center justify-between border-b border-slate-800">
           {!collapsed && (
@@ -99,7 +109,7 @@ export const Sidebar: React.FC = () => {
           </button>
         </div>
 
-        {/* Navigation Items (Role-Filtered) */}
+        {/* Navigation Items */}
         <nav className="p-3 space-y-1">
           {currentNavItems.map((item) => {
             const Icon = item.icon;

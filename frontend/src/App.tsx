@@ -17,10 +17,18 @@ import { Investigations } from './pages/investigations/Investigations';
 import { Analytics } from './pages/Analytics';
 import { AuditTrail } from './pages/AuditTrail';
 import { DataIngestion } from './pages/DataIngestion';
+import { GISAnalytics } from './pages/GISAnalytics';
+import { GeofenceInspector } from './pages/GeofenceInspector';
 
 const RoleBasedHome: React.FC = () => {
-  // For the SIH MVP, all roles point to the unified data-aware Risk Intelligence Dashboard
-  return <MinistryDashboard />;
+  const { role } = useAuth();
+  switch (role) {
+    case 'MINISTER': return <MinisterDashboard />;
+    case 'MINISTRY': return <MinistryDashboard />;
+    case 'STATE': return <StateDashboard />;
+    case 'DISTRICT': return <DistrictDashboard />;
+    default: return <MinistryDashboard />;
+  }
 };
 
 const ProtectedLayout: React.FC = () => {
@@ -35,19 +43,22 @@ const ProtectedLayout: React.FC = () => {
         <main className="flex-1">
           <Routes>
             <Route path="/" element={<RoleBasedHome />} />
-            <Route path="/minister" element={<MinistryDashboard />} />
-            <Route path="/ministry" element={<MinistryDashboard />} />
-            <Route path="/state" element={<MinistryDashboard />} />
-            <Route path="/district" element={<MinistryDashboard />} />
-            <Route path="/projects" element={<Projects />} />
-            <Route path="/projects/:id" element={<ProjectDetail />} />
-            <Route path="/risk-intelligence" element={<RoleBasedHome />} />
-            <Route path="/vendors" element={<Vendors />} />
-            <Route path="/investigations" element={<Investigations />} />
-            <Route path="/notifications" element={<Investigations />} />
-            <Route path="/analytics" element={<Analytics />} />
-            <Route path="/audit-trail" element={<AuditTrail />} />
-            <Route path="/data-ingestion" element={<DataIngestion />} />
+            <Route path="minister" element={<MinisterDashboard />} />
+            <Route path="ministry" element={<MinistryDashboard />} />
+            <Route path="state" element={<StateDashboard />} />
+            <Route path="district" element={<DistrictDashboard />} />
+            <Route path="gis-analytics" element={<GISAnalytics />} />
+            <Route path="geofence-inspector" element={<GeofenceInspector />} />
+            <Route path="projects" element={<Projects />} />
+            <Route path="projects/:id" element={<ProjectDetail />} />
+            <Route path="risk-intelligence" element={<RoleBasedHome />} />
+            <Route path="vendors" element={<Vendors />} />
+            <Route path="investigations" element={<Investigations />} />
+            <Route path="notifications" element={<Investigations />} />
+            <Route path="analytics" element={<Analytics />} />
+            <Route path="audit-trail" element={<AuditTrail />} />
+            <Route path="data-ingestion" element={<DataIngestion />} />
+            <Route path="*" element={<RoleBasedHome />} />
           </Routes>
         </main>
       </div>

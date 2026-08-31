@@ -222,7 +222,7 @@ export const ProjectDetail: React.FC = () => {
               </div>
             </div>
             <span className="text-[10px] bg-indigo-500/30 text-indigo-300 border border-indigo-400/30 px-2.5 py-0.5 rounded-full font-bold uppercase">
-              Confidence: {aiProjectSummary.structuredData?.confidence}%
+              Cross-Verified Evidence
             </span>
           </div>
 
@@ -251,9 +251,6 @@ export const ProjectDetail: React.FC = () => {
             <div className="space-y-2">
               <span className="text-slate-400 font-medium block">Contractor Name</span>
               <p className="font-extrabold text-slate-900 text-sm">{project.vendorName}</p>
-              {project.contractor_risk && (
-                <p className="text-[10px] text-slate-500 font-semibold mt-1">Confidence Score: {project.contractor_risk.confidence}% (Data Completeness)</p>
-              )}
             </div>
 
             {project.contractor_risk && (

@@ -1,0 +1,26 @@
+Source File Type,Source Column,Proposed Standard Column,Notes
+Recommended,WORK,work_id,Contains Work ID + Category concatenated. Needs splitting.
+Recommended,Work category,work_type,
+Recommended,State,state,
+Recommended,IDA,district,NEEDS HUMAN VERIFICATION. Often formatted as DISTRICT(DISTRICT PLANNING OFFICER DISTRICT_IDA)
+Recommended,Hon'ble Members of Parliament,mp_name,Contains MP name and term years.
+Recommended,Elected/Nominated,constituency,NEEDS HUMAN VERIFICATION. Sometimes this column is named Constituency instead.
+Recommended,Constituency,constituency,
+Recommended,Work description,work_description,
+Recommended,Recommended date,recommendation_date,
+Recommended,RECOMMENDED AMOUNT   ( ₹ ),recommended_amount,
+Recommended,Sanction Date,sanction_date,
+Sanctioned,Work,work_id,Contains Work ID + Category concatenated. Needs splitting.
+Sanctioned,Work category,work_type,
+Sanctioned,Sanction Amount ( ₹ ),sanctioned_amount,
+Sanctioned,Work Status,work_status,
+Expenditure,Work ID,work_id,Clean Work ID
+Expenditure,Work,work_type,NEEDS HUMAN VERIFICATION. In this file Work column seems to hold the category.
+Expenditure,Expenditure Date,expenditure_date,
+Expenditure,Vendor Name,vendor_name,
+Expenditure,Payment Status,payment_status,
+Expenditure,Fund Disbursed Amount ( ₹ ),payment_amount,NEEDS HUMAN VERIFICATION. Is this transaction amount or cumulative?
+Completed,Work,work_id,Contains Work ID + Category concatenated. Needs splitting.
+Completed,Image,image_available,Usually says "Images" if present.
+Completed,Completion Date,actual_completion_date,
+Completed,Amount Disbursed ( ₹ ),expenditure_amount,NEEDS HUMAN VERIFICATION. Total disbursed upon completion?

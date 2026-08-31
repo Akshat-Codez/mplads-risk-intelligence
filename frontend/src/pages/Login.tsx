@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { StateEmblem } from '../components/common/StateEmblem';
-import { UserCheck, KeyRound, ArrowRight, Play } from '../components/common/Icons';
+import { UserCheck, KeyRound } from '../components/common/Icons';
 import { useAuth } from '../context/AuthContext';
 import { Role } from '../types';
 
@@ -17,15 +17,24 @@ export const Login: React.FC = () => {
   const { login } = useAuth();
   const navigate = useNavigate();
 
+  const getDashboardPath = (targetRole: Role) => {
+    switch (targetRole) {
+      case 'MINISTER': return '/app/minister';
+      case 'STATE': return '/app/state';
+      case 'DISTRICT': return '/app/district';
+      case 'MINISTRY': default: return '/app/ministry';
+    }
+  };
+
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
     login(username, selectedRole);
-    navigate('/app');
+    navigate(getDashboardPath(selectedRole));
   };
 
   const handleDemoMode = (demoRole: Role) => {
     login(`DEMO-${demoRole}-2026`, demoRole);
-    navigate('/app');
+    navigate(getDashboardPath(demoRole));
   };
 
   return (
@@ -59,7 +68,7 @@ export const Login: React.FC = () => {
           
           {/* Official Emblem & Header */}
           <div className="text-center space-y-2">
-            <StateEmblem size={56} className="mx-auto" />
+            <StateEmblem size={64} className="mx-auto" darkBg={false} />
             <div className="text-[11px] font-bold text-slate-800 uppercase tracking-tight leading-snug">
               Government of India <br />
               <span className="text-blue-900">Ministry of Statistics and Programme Implementation</span> <br />
@@ -133,7 +142,7 @@ export const Login: React.FC = () => {
 
             <button
               type="submit"
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg shadow transition text-sm"
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg shadow transition text-sm cursor-pointer"
             >
               Login
             </button>
@@ -156,7 +165,7 @@ export const Login: React.FC = () => {
               <button onClick={() => handleDemoMode('STATE')} className="p-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-900 font-bold rounded border border-emerald-200">
                 🏢 State Nodal
               </button>
-              <button onClick={() => handleDemoMode('DISTRICT')} className="p-1.5 bg-purple-50 hover:bg-purple-100 text-purple-900 font-bold rounded border border-purple-200">
+              <button onClick={() => handleDemoMode('DISTRICT')} className="p-1.5 bg-purple-50 hover:bg-purple-100 text-purple-800 font-bold rounded border border-purple-200">
                 📍 District DC
               </button>
             </div>

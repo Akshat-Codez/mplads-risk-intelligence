@@ -13,7 +13,6 @@ import {
   ChevronLeft,
   ChevronRight
 } from './Icons';
-import { StateEmblem } from './StateEmblem';
 import { useAuth } from '../../context/AuthContext';
 import { Role } from '../../types';
 
@@ -68,12 +67,14 @@ export const Sidebar: React.FC = () => {
         collapsed ? 'w-20' : 'w-64'
       }`}
     >
-      {/* Brand Header */}
+      {/* Brand Header (Clean Navy Text Branding without Emblem) */}
       <div>
         <div className="p-4 flex items-center justify-between border-b border-slate-800">
           {!collapsed && (
             <div className="flex items-center space-x-3">
-              <StateEmblem size={36} darkBg={true} />
+              <div className="w-9 h-9 rounded-lg bg-blue-600 text-white flex items-center justify-center font-bold text-lg shadow">
+                N
+              </div>
               <div>
                 <h1 className="font-extrabold text-white text-base tracking-wide font-serif">NIRMAN</h1>
                 <p className="text-[10px] text-amber-400 font-bold uppercase tracking-wider">
@@ -85,7 +86,9 @@ export const Sidebar: React.FC = () => {
             </div>
           )}
           {collapsed && (
-            <StateEmblem size={32} darkBg={true} className="mx-auto" />
+            <div className="w-8 h-8 rounded-lg bg-blue-600 text-white flex items-center justify-center font-bold text-base mx-auto">
+              N
+            </div>
           )}
 
           <button 
@@ -120,7 +123,7 @@ export const Sidebar: React.FC = () => {
         </nav>
       </div>
 
-      {/* Bottom Footer (Clean Brand Tag) */}
+      {/* Bottom Footer */}
       {!collapsed && (
         <div className="p-4 text-[10px] text-slate-500 border-t border-slate-800/60 text-center font-mono">
           MoSPI Official Portal • v2.4

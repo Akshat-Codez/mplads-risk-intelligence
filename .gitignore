@@ -65,7 +65,7 @@ backend/prisma/dev.db-journal
 backend/prisma/*.db
 backend/prisma/*.db-journal
 
-# Uploaded test documents & OCR temporary files
+# Temporary Uploads & OCR Output
 uploads/
 backend/uploads/*.pdf
 backend/uploads/*.png
@@ -75,6 +75,18 @@ ocr_output/
 extracted/
 temp/
 tmp/
+
+# Stale / Duplicate nested subfolders (canonical versions at root)
+frontend/backend/
+frontend/ai_services/
+frontend/ml/
+frontend/scripts/
+frontend/docs/
+frontend/tests/
+frontend/data/
+frontend/data_inventory.json
+frontend/.gitignore
+frontend/README.md
 
 # Environment configurations & secrets (Preserve .env.example)
 .env

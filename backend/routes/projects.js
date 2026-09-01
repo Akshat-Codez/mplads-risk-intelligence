@@ -5,6 +5,8 @@ import { getAuthorityScopeFilter, isProjectInScope } from '../utils/scopeFilter.
 import fs from 'fs';
 import path from 'path';
 import { parse } from 'csv-parse/sync';
+import { execSync } from 'child_process';
+import { aggregateRisk } from '../risk/riskAggregator.js';
 
 const router = express.Router();
 const prisma = new PrismaClient();
@@ -56,36 +58,49 @@ function mapProjectToFrontend(project) {
   p.financial_risk_level = p.financialRiskLevel || 'LOW';
   p.financial_signals = p.financialSignals;
 
+  // 7-Dimension Risk Scores (snake_case aliases)
+  p.progress_risk_score = p.progressRiskScore || 0;
+  p.progress_risk_level = p.progressRiskLevel || 'LOW';
+  p.gis_risk_score = p.gisRiskScore || 0;
+  p.gis_risk_level = p.gisRiskLevel || 'LOW';
+  p.documentation_risk_score = p.documentationRiskScore || 0;
+  p.documentation_risk_level = p.documentationRiskLevel || 'LOW';
+  p.cross_signal_score = p.crossSignalScore || 0;
+  p.cross_signal_level = p.crossSignalLevel || 'LOW';
+  p.contractor_risk_score = p.contractorRiskScore || 0;
+  p.contractor_risk_level = p.contractorRiskLevel || 'LOW';
+  p.procurement_risk_score = p.procurementRiskScore || 0;
+  p.procurement_risk_level = p.procurementRiskLevel || 'LOW';
+
+  // Progress & GIS data
+  p.physical_progress = p.physicalProgress;
+  p.financial_progress = p.financialProgress;
+  p.latitude = p.latitude;
+  p.longitude = p.longitude;
+  p.document_completeness = p.documentCompleteness || 0;
+  p.confidence_score = p.confidenceScore || 50;
+  p.data_completeness = p.dataCompleteness || 0;
+
   // Parse JSON components
-  if (p.riskComponents) {
-    try {
-      p.risk_components_parsed = JSON.parse(p.riskComponents);
-    } catch (e) {
-      p.risk_components_parsed = {};
-    }
-  } else {
-    p.risk_components_parsed = {};
-  }
+  const safeParseJSON = (val, fallback) => {
+    if (!val) return fallback;
+    try { return JSON.parse(val); } catch (e) { return fallback; }
+  };
 
-  if (p.financialSignals) {
-    try {
-      p.financial_signals_parsed = JSON.parse(p.financialSignals);
-    } catch (e) {
-      p.financial_signals_parsed = [];
-    }
-  } else {
-    p.financial_signals_parsed = [];
-  }
-
-  if (p.structuredReasons) {
-    try {
-      p.structured_reasons_parsed = JSON.parse(p.structuredReasons);
-    } catch (e) {
-      p.structured_reasons_parsed = [];
-    }
-  } else {
-    p.structured_reasons_parsed = [];
-  }
+  p.risk_components_parsed = safeParseJSON(p.riskComponents, {});
+  p.financial_signals_parsed = safeParseJSON(p.financialSignals, []);
+  p.structured_reasons_parsed = safeParseJSON(p.structuredReasons, []);
+  p.progress_signals_parsed = safeParseJSON(p.progressSignals, []);
+  p.gis_signals_parsed = safeParseJSON(p.gisSignals, []);
+  p.documentation_signals_parsed = safeParseJSON(p.documentationSignals, []);
+  p.cross_signals_parsed = safeParseJSON(p.crossSignals, []);
+  p.contractor_signals_parsed = safeParseJSON(p.contractorSignals, []);
+  p.procurement_signals_parsed = safeParseJSON(p.procurementSignals, []);
+  p.top_risk_factors = safeParseJSON(p.topRiskFactors, []);
+  p.recommended_actions = safeParseJSON(p.recommendedActions, []);
+  p.missing_data_list = safeParseJSON(p.missingDataList, []);
+  p.documents_checklist = safeParseJSON(p.documentsChecklist, {});
+  p.progress_timeline = safeParseJSON(p.progressTimeline, []);
 
   return p;
 }
@@ -442,7 +457,7 @@ async function syncDatabaseWithScoredCsv() {
 }
 
 export async function recalculateOverallProjectRisks(prismaInstance) {
-  console.log('Recalculating overall project risk scores and levels...');
+  console.log('Recalculating overall project risk scores using 7-dimension aggregator...');
   const projects = await prismaInstance.project.findMany({
     include: {
       procurements: {
@@ -467,53 +482,40 @@ export async function recalculateOverallProjectRisks(prismaInstance) {
       .replace(/(pvtltd|pvt|ltd|limited|company|co|construction|constructions|infra|infrastructure|developers|projects)$/g, '');
   }
 
+  // Pre-process: set procurement scores from procurement relations
+  for (const p of projects) {
+    const latestProc = p.procurements && p.procurements.length > 0 ? p.procurements[0] : null;
+    if (latestProc && latestProc.status === 'Analyzed' && latestProc.procurementRiskScore) {
+      p.procurementRiskScore = latestProc.procurementRiskScore;
+    }
+  }
+
   let count = 0;
   for (const p of projects) {
-    const finScore = p.financialRiskScore || 0;
-    
-    const latestProc = p.procurements && p.procurements.length > 0 ? p.procurements[0] : null;
-    const procScore = latestProc && latestProc.status === 'Analyzed' ? latestProc.procurementRiskScore : null;
-
-    let contractorScore = null;
+    // Resolve contractor profile
+    let contractorProfile = null;
     if (p.vendorName) {
       const norm = normalizeName(p.vendorName);
-      const c = contractorMap.get(norm);
-      if (c) {
-        contractorScore = c.contractorRiskScore || 0;
-      }
+      contractorProfile = contractorMap.get(norm) || null;
     }
 
-    let weightSum = 0.5;
-    let weightedScoreSum = 0.5 * finScore;
-    let confidence = 50;
+    // Run the 7-dimension aggregator
+    const result = aggregateRisk(p, projects, contractorProfile);
 
-    if (procScore !== null) {
-      weightSum += 0.3;
-      weightedScoreSum += 0.3 * procScore;
-      confidence += 30;
-    }
-    if (contractorScore !== null) {
-      weightSum += 0.2;
-      weightedScoreSum += 0.2 * contractorScore;
-      confidence += 20;
-    }
+    // Determine risk level string
+    const overallLevel = result.overallLevel;
+    const overallScore = result.overallScore;
 
-    const overallScore = Math.round((weightedScoreSum / weightSum) * 10) / 10;
-
-    let overallLevel = 'LOW';
-    if (confidence < 60 && overallScore < 25.0) {
-      overallLevel = 'INSUFFICIENT DATA';
-    } else if (overallScore >= 50.0) {
-      overallLevel = 'HIGH';
-    } else if (overallScore >= 25.0) {
-      overallLevel = 'MEDIUM';
-    }
-
+    // Build legacy-compatible riskComponents JSON
     const comps = {
-      financial: finScore,
-      procurement: procScore,
-      contractor: contractorScore,
-      confidence: confidence
+      financial: result.dimensions.financial.score,
+      procurement: result.dimensions.procurement.score,
+      progress: result.dimensions.progress.score,
+      contractor: result.dimensions.contractor.score,
+      gis: result.dimensions.gis.score,
+      documentation: result.dimensions.documentation.score,
+      crossSignal: result.dimensions.crossSignal.score,
+      confidence: result.confidence
     };
 
     await prismaInstance.project.update({
@@ -521,48 +523,115 @@ export async function recalculateOverallProjectRisks(prismaInstance) {
       data: {
         riskScore: overallScore,
         riskLevel: overallLevel,
-        riskComponents: JSON.stringify(comps)
+        riskComponents: JSON.stringify(comps),
+
+        // 7-Dimension individual scores
+        financialRiskScore: result.dimensions.financial.score,
+        financialRiskLevel: result.dimensions.financial.level,
+        financialSignals: JSON.stringify(result.dimensions.financial.signals || []),
+
+        progressRiskScore: result.dimensions.progress.score,
+        progressRiskLevel: result.dimensions.progress.level,
+        progressSignals: JSON.stringify(result.dimensions.progress.signals || []),
+
+        gisRiskScore: result.dimensions.gis.score,
+        gisRiskLevel: result.dimensions.gis.level,
+        gisSignals: JSON.stringify(result.dimensions.gis.signals || []),
+
+        documentationRiskScore: result.dimensions.documentation.score,
+        documentationRiskLevel: result.dimensions.documentation.level,
+        documentationSignals: JSON.stringify(result.dimensions.documentation.signals || []),
+
+        crossSignalScore: result.dimensions.crossSignal.score,
+        crossSignalLevel: result.dimensions.crossSignal.level,
+        crossSignals: JSON.stringify(result.dimensions.crossSignal.signals || []),
+
+        // Contractor score from aggregator
+        contractorRiskScore: result.dimensions.contractor.score,
+        contractorRiskLevel: result.dimensions.contractor.level,
+        contractorSignals: JSON.stringify(result.dimensions.contractor.signals || []),
+
+        // Explainability & Confidence
+        confidenceScore: result.confidence,
+        dataCompleteness: result.dataCompleteness,
+        topRiskFactors: JSON.stringify(result.topRiskFactors || []),
+        recommendedActions: JSON.stringify(result.recommendedActions || []),
+        missingDataList: JSON.stringify(result.missingData || [])
       }
     });
     count++;
   }
-  console.log(`Recalculated overall risk for ${count} projects.`);
+  console.log(`Recalculated 7-dimension risk for ${count} projects.`);
 }
 
 // POST /api/projects/run-analysis - trigger AI analysis and sync results
 router.post('/run-analysis', authMiddleware, async (req, res) => {
   try {
-    console.log('Triggering AI Analysis...');
-    const response = await fetch('http://localhost:8000/api/run_analysis', {
-      method: 'POST'
-    });
-
-    if (!response.ok) {
-      const errorMsg = await response.text();
-      console.error('FastAPI error:', errorMsg);
-      return res.status(500).json({ error: 'AI analysis service failed' });
+    console.log('[AI DEBUG] Request received: POST /api/projects/run-analysis');
+    console.log('[AI DEBUG] Triggered by User:', req.user ? req.user.id : 'anonymous', `(${req.user ? req.user.role : 'NO_ROLE'})`);
+    
+    const aiServiceUrl = process.env.AI_SERVICE_URL || 'http://localhost:8000';
+    console.log('[AI DEBUG] AI provider: Python ML Risk Engine (Isolation Forest + Peer Benchmarking + NLP)');
+    console.log('[AI DEBUG] AI endpoint:', `${aiServiceUrl}/api/run_analysis`);
+    
+    let analysisRan = false;
+    
+    // Attempt 1: Call FastAPI microservice if running
+    try {
+      console.log('[AI DEBUG] Calling AI service at:', `${aiServiceUrl}/api/run_analysis`);
+      const response = await fetch(`${aiServiceUrl}/api/run_analysis`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      console.log('[AI DEBUG] AI response status:', response.status);
+      if (response.ok) {
+        const body = await response.json();
+        console.log('[AI DEBUG] AI response body:', JSON.stringify(body));
+        analysisRan = true;
+      } else {
+        const errText = await response.text();
+        console.warn('[AI DEBUG] FastAPI error:', errText);
+      }
+    } catch (connErr) {
+      console.log('[AI DEBUG] FastAPI microservice on port 8000 not reachable (', connErr.message, '). Falling back to direct Python pipeline execution...');
     }
 
-    const data = await response.json();
-    console.log('AI Analysis completed successfully. Syncing database...');
-    
-    // Sync SQLite database with updated master_dataset_scored.csv
+    // Attempt 2: Direct local Python pipeline execution
+    if (!analysisRan) {
+      console.log('[AI DEBUG] Preparing AI input: Executing scripts/run_risk_pipeline.py directly...');
+      const pythonExecutable = process.platform === 'win32' ? 'python' : 'python3';
+      const rootDir = path.resolve(process.cwd(), '..');
+      execSync(`${pythonExecutable} scripts/run_risk_pipeline.py`, {
+        cwd: rootDir,
+        stdio: 'inherit'
+      });
+      console.log('[AI DEBUG] Direct Python ML risk pipeline execution completed.');
+    }
+
+    console.log('[AI DEBUG] Syncing database with scored dataset...');
     await syncDatabaseWithScoredCsv();
 
+    console.log('[AI DEBUG] Recalculating 7-dimension risk aggregations...');
+    await recalculateOverallProjectRisks(prisma);
+
+    console.log('[AI DEBUG] Analysis completed successfully.');
+
     // Create Audit Log
-    await prisma.auditLog.create({
-      data: {
-        userId: req.user.id,
-        action: 'RUN_AI_ANALYSIS',
-        entity: 'System',
-        details: 'Triggered full-constituency AI anomaly and financial z-score risk re-analysis.'
-      }
-    });
+    if (req.user) {
+      await prisma.auditLog.create({
+        data: {
+          userId: req.user.id,
+          action: 'RUN_AI_ANALYSIS',
+          entity: 'System',
+          details: 'Triggered full-constituency AI anomaly and financial z-score risk re-analysis.'
+        }
+      });
+    }
 
     res.json({ message: 'AI Analysis complete and database synced successfully.' });
   } catch (err) {
-    console.error('Error running analysis:', err);
-    res.status(500).json({ error: 'Failed to complete analysis pipeline' });
+    console.error('[AI DEBUG] Error running analysis:', err);
+    res.status(500).json({ error: 'AI Analysis could not be completed. Please try again.' });
   }
 });
 

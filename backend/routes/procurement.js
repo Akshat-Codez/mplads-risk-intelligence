@@ -131,6 +131,8 @@ router.post('/upload', authMiddleware, upload.single('file'), async (req, res) =
 router.post('/:documentId/analyze', authMiddleware, async (req, res) => {
   try {
     const { documentId } = req.params;
+    console.log('[AI DEBUG] Request received: POST /api/procurement/:documentId/analyze');
+    console.log('[AI DEBUG] Document ID:', documentId);
 
     const doc = await prisma.procurement.findUnique({
       where: { id: documentId },
@@ -138,28 +140,47 @@ router.post('/:documentId/analyze', authMiddleware, async (req, res) => {
     });
 
     if (!doc) {
+      console.warn('[AI DEBUG] Document not found in database:', documentId);
       return res.status(404).json({ error: 'Document not found' });
     }
 
-    // Call FastAPI microservice to extract and benchmark
-    console.log(`Sending document ${doc.uploadedFile} to FastAPI for analysis...`);
-    const fastapiRes = await fetch('http://localhost:8000/api/procurement/analyze', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        pdf_path: doc.uploadedFile,
-        filename: path.basename(doc.uploadedFile)
-      })
-    });
+    console.log('[AI DEBUG] Project ID:', doc.projectId);
+    console.log('[AI DEBUG] Project found:', doc.project ? doc.project.projectId : 'Yes');
+    console.log('[AI DEBUG] Preparing AI input: PDF file', doc.uploadedFile);
+
+    const aiServiceUrl = process.env.AI_SERVICE_URL || 'http://localhost:8000';
+    console.log('[AI DEBUG] AI provider: FastAPI PDF Extraction & SSR Price Benchmarking');
+    console.log('[AI DEBUG] AI endpoint:', `${aiServiceUrl}/api/procurement/analyze`);
+    
+    let fastapiRes;
+    try {
+      console.log('[AI DEBUG] Calling AI service at:', `${aiServiceUrl}/api/procurement/analyze`);
+      fastapiRes = await fetch(`${aiServiceUrl}/api/procurement/analyze`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          pdf_path: doc.uploadedFile,
+          filename: path.basename(doc.uploadedFile)
+        })
+      });
+      console.log('[AI DEBUG] AI response status:', fastapiRes.status);
+    } catch (connErr) {
+      console.error('[AI DEBUG] FastAPI procurement service connection error:', connErr.message);
+      return res.status(503).json({
+        error: 'AI Analysis could not be completed. Please ensure the AI microservice is running.',
+        code: 'AI_SERVICE_UNAVAILABLE'
+      });
+    }
 
     if (!fastapiRes.ok) {
       const errMsg = await fastapiRes.text();
-      console.error('FastAPI procurement error:', errMsg);
-      return res.status(500).json({ error: 'FastAPI extraction service failed' });
+      console.error('[AI DEBUG] FastAPI procurement error response:', errMsg);
+      return res.status(502).json({ error: 'AI Analysis could not be completed. Please try again.' });
     }
 
     const report = await fastapiRes.json();
-    console.log('FastAPI analysis complete. Saving to database...');
+    console.log('[AI DEBUG] AI response body:', JSON.stringify(report).slice(0, 150) + '...');
+    console.log('[AI DEBUG] Analysis completed. Updating database record...');
 
     // Update Procurement record in database
     const updatedDoc = await prisma.procurement.update({

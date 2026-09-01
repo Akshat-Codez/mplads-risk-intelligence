@@ -23,28 +23,63 @@ interface GISMapProps {
 }
 
 const INDIA_BOUNDS: [[number, number], [number, number]] = [
-  [68.0, 6.5],
-  [97.5, 37.5]
+  [55.0, 0.0],
+  [108.0, 42.0]
 ];
 
-// Robust helper to normalize state/district names handling spelling variants & aliases
 const normalizeName = (name: string): string => {
   if (!name) return '';
-  const cleaned = name.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+  let cleaned = name.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+
+  // State Aliases
   if (cleaned === 'ORISSA' || cleaned === 'ODISHA') return 'ODISHA';
   if (cleaned === 'UTTARANCHAL' || cleaned === 'UTTARAKHAND') return 'UTTARAKHAND';
   if (cleaned === 'PONDICHERRY' || cleaned === 'PUDUCHERRY') return 'PUDUCHERRY';
-  if (cleaned.includes('ANDAMAN') || cleaned.includes('NICOBAR')) return 'ANDAMAN';
-  if (cleaned.includes('DADRA') || cleaned.includes('NAGAR') || cleaned.includes('DAMAN')) return 'DADRA';
-  if (cleaned.includes('BENGALURU') || cleaned.includes('BANGALORE')) return 'BANGALORE';
-  
-  // District Spelling Variations & Aliases across Indian GeoJSONs
-  if (cleaned.includes('PURBACHAMPARAN') || cleaned.includes('PURBICHAMPARAN') || cleaned.includes('EASTCHAMPARAN')) return 'EASTCHAMPARAN';
-  if (cleaned.includes('PASHCHIMCHAMPARAN') || cleaned.includes('PASCHIMCHAMPARAN') || cleaned.includes('WESTCHAMPARAN')) return 'WESTCHAMPARAN';
-  if (cleaned.includes('PASHCHIMMEDINIPUR') || cleaned.includes('PASCHIMMEDINIPUR') || cleaned.includes('WESTMIDNAPORE')) return 'WESTMIDNAPORE';
-  if (cleaned.includes('PURBAMEDINIPUR') || cleaned.includes('EASTMIDNAPORE')) return 'EASTMIDNAPORE';
-  if (cleaned.includes('KANPURURBAN') || cleaned.includes('KANPURNAGAR')) return 'KANPURNAGAR';
-  if (cleaned.includes('BOMBAY') || cleaned.includes('MUMBAI')) return 'MUMBAI';
+  if (cleaned === 'TELANGANA' || cleaned === 'TELENGANA') return 'TELANGANA';
+  if (cleaned === 'TAMILNADU' || cleaned === 'TAMILNAD') return 'TAMILNADU';
+  if (cleaned === 'ANDHRAPRADESH' || cleaned === 'ANDHRA') return 'ANDHRAPRADESH';
+
+  // AP 2022 District Reorganization Mapping to GeoJSON Polygons
+  if (cleaned.includes('ANAKAPALLI') || cleaned.includes('ALLURISITHARAMA')) return 'VISAKHAPATNAM';
+  if (cleaned.includes('KAKINADA') || cleaned.includes('KONASEEMA') || cleaned.includes('AMBEDKARKONASEEMA')) return 'EASTGODAVARI';
+  if (cleaned.includes('ELURU')) return 'WESTGODAVARI';
+  if (cleaned.includes('NTR')) return 'KRISHNA';
+  if (cleaned.includes('PALNADU') || cleaned.includes('BAPATLA')) return 'GUNTUR';
+  if (cleaned.includes('NANDYAL')) return 'KURNOOL';
+  if (cleaned.includes('SRISATHYASAI')) return 'ANANTAPUR';
+  if (cleaned.includes('ANNAMAYYA')) return 'CUDDAPAH';
+  if (cleaned.includes('TIRUPATI')) return 'CHITTOOR';
+  if (cleaned.includes('PARVATHIPURAM')) return 'SRIKAKULAM';
+
+  // Telangana Reorganization Mapping to GeoJSON Polygons
+  if (cleaned.includes('SIDDIPET') || cleaned.includes('MEDCHAL') || cleaned.includes('SANGAREDDY') || cleaned.includes('VIKARABAD')) return 'HYDERABAD';
+  if (cleaned.includes('PEDDAPALLI') || cleaned.includes('JAGTIAL') || cleaned.includes('MANCHERIAL')) return 'KARIMNAGAR';
+  if (cleaned.includes('BHADRADRI') || cleaned.includes('KOTHAGUDEM')) return 'KHAMMAM';
+  if (cleaned.includes('JAYASHANKAR') || cleaned.includes('MULUGU') || cleaned.includes('MAHABUBABAD') || cleaned.includes('HANUMAKONDA')) return 'WARANGAL';
+  if (cleaned.includes('NAGARKURNOOL') || cleaned.includes('WANAPARTHY') || cleaned.includes('JOGULAMBA')) return 'MAHABUBNAGAR';
+  if (cleaned.includes('SURYAPET') || cleaned.includes('YADADRI')) return 'NALGONDA';
+
+  // Karnataka Aliases
+  if (cleaned.includes('BENGALURU') || cleaned.includes('BANGALORE')) {
+    if (cleaned.includes('RURAL')) return 'BANGALORERURAL';
+    return 'BANGALOREURBAN';
+  }
+  if (cleaned.includes('BELAGAVI') || cleaned.includes('BELGAUM')) return 'BELGAUM';
+  if (cleaned.includes('VIJAYAPURA') || cleaned.includes('BIJAPUR')) return 'BIJAPUR';
+  if (cleaned.includes('KALABURAGI') || cleaned.includes('GULBARGA')) return 'GULBARGA';
+  if (cleaned.includes('BALLARI') || cleaned.includes('BELLARY')) return 'BELLARY';
+  if (cleaned.includes('MYSURU') || cleaned.includes('MYSORE')) return 'MYSORE';
+  if (cleaned.includes('SHIVAMOGGA') || cleaned.includes('SHIMOGA')) return 'SHIMOGA';
+  if (cleaned.includes('TUMAKURU') || cleaned.includes('TUMKUR')) return 'TUMKUR';
+  if (cleaned.includes('UTTARAKANNADA') || cleaned.includes('UTTARKANNAND') || cleaned.includes('NORTHCANARA')) return 'UTTARKANNAND';
+  if (cleaned.includes('DAKSHINAKANNADA') || cleaned.includes('DAKSHINKANNAD') || cleaned.includes('SOUTHCANARA')) return 'DAKSHINKANNAD';
+
+  // Bihar Aliases
+  if (cleaned.includes('PURBI') || cleaned.includes('PURBA') || cleaned.includes('EASTCHAMPARAN')) return 'PURBACHAMPARAN';
+  if (cleaned.includes('PASCHIM') || cleaned.includes('PASHCHIM') || cleaned.includes('WESTCHAMPARAN')) return 'PASHCHIMCHAMPARAN';
+
+  // Nagaland Aliases
+  if (cleaned.includes('CHUMOUKEDIMA') || cleaned.includes('TSEMINYU') || cleaned.includes('SHAMATOR') || cleaned.includes('NOKLAK') || cleaned.includes('PEREN') || cleaned.includes('LONGLENG') || cleaned.includes('KIPHIRE')) return 'KOHIMA';
 
   return cleaned;
 };
@@ -70,6 +105,7 @@ export const GISMap: React.FC<GISMapProps> = ({
   onSelectProject
 }) => {
   const mapRef = useRef<MapRef>(null);
+  const [isMinimized, setIsMinimized] = useState(false);
   const [customPins, setCustomPins] = useState<{ id: string; lat: number; lng: number; label: string }[]>([]);
   const [indiaStatesGeoJson, setIndiaStatesGeoJson] = useState<any>(null);
   const [indiaDistrictsGeoJson, setIndiaDistrictsGeoJson] = useState<any>(null);
@@ -79,6 +115,20 @@ export const GISMap: React.FC<GISMapProps> = ({
     longitude: number;
     latitude: number;
   } | null>(null);
+
+  const handleResetIndiaView = () => {
+    onSelectState('ALL');
+    onSelectDistrict('ALL');
+    if (mapRef.current) {
+      mapRef.current.flyTo({
+        center: [78.9629, 22.5937],
+        zoom: 3.6,
+        pitch: 0,
+        bearing: 0,
+        duration: 1200
+      });
+    }
+  };
 
   // Trigger MapLibre canvas resize on mount to guarantee immediate rendering
   useEffect(() => {
@@ -221,10 +271,11 @@ export const GISMap: React.FC<GISMapProps> = ({
     const activeDistrictName = selectedDistrict !== 'ALL' ? selectedDistrict : 'Varanasi';
     const normActiveDist = normalizeName(activeDistrictName);
 
-    // 1. Filter district GeoJSON to the specific target district boundary using alias normalization
+    // 1. Filter district GeoJSON to ONLY the single target district boundary of the logged-in District Collector
     const singleDistrictFeatures = indiaDistrictsGeoJson.features.filter((feat: any) => {
       const rawDistName = feat?.properties?.NAME_2 || feat?.properties?.DISTRICT || '';
-      return normalizeName(rawDistName) === normActiveDist;
+      const normRaw = normalizeName(rawDistName);
+      return normRaw === normActiveDist || (normRaw.length > 3 && normActiveDist.length > 3 && (normRaw.includes(normActiveDist) || normActiveDist.includes(normRaw)));
     });
 
     // 2. Process projects array: Filter valid coordinates vs missing coordinates
@@ -392,16 +443,53 @@ export const GISMap: React.FC<GISMapProps> = ({
   };
 
   return (
-    <div style={{ position: 'relative', width: '100%', height: '600px' }} className={`rounded-2xl overflow-hidden shadow-lg border border-slate-300 font-sans ${pinModeEnabled ? 'cursor-crosshair' : ''}`}>
+    <div
+      style={{ position: 'relative', width: '100%', height: isMinimized ? '360px' : '620px' }}
+      className={`rounded-2xl overflow-hidden shadow-lg border border-slate-300 font-sans transition-all duration-300 ${pinModeEnabled ? 'cursor-crosshair' : ''}`}
+    >
       <Map
         ref={mapRef}
         mapStyle="https://tiles.openfreemap.org/styles/positron"
-        initialViewState={{ longitude: 78.9629, latitude: 22.5937, zoom: 4.2 }}
+        initialViewState={{ longitude: 78.9629, latitude: 22.5937, zoom: 3.6 }}
+        minZoom={2.8}
         maxBounds={INDIA_BOUNDS}
         style={{ width: '100%', height: '100%' }}
         onClick={handleMapClick}
       >
         <NavigationControl position="top-right" />
+
+        {/* TOP-LEFT OVERLAY CONTROLS: RESET ALL INDIA & MINIMIZE/EXPAND MAP */}
+        <div className="absolute top-4 left-4 z-[1000] flex items-center space-x-2">
+          <button
+            type="button"
+            onClick={handleResetIndiaView}
+            className="bg-white/95 backdrop-blur-md hover:bg-white text-slate-900 font-extrabold text-xs px-3.5 py-2 rounded-xl border border-slate-200 shadow-md flex items-center space-x-2 transition cursor-pointer hover:shadow-lg active:scale-95"
+            title="Reset camera zoom & filters to view the complete map of India"
+          >
+            <span className="text-base">🇮🇳</span>
+            <span>Fit All India Map</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setIsMinimized(prev => !prev);
+              setTimeout(() => mapRef.current?.getMap()?.resize(), 320);
+            }}
+            className="bg-white/95 backdrop-blur-md hover:bg-white text-slate-800 font-bold text-xs px-3 py-2 rounded-xl border border-slate-200 shadow-md flex items-center space-x-1.5 transition cursor-pointer hover:shadow-lg active:scale-95"
+            title={isMinimized ? "Expand map to full height" : "Minimize map height to view dashboard below"}
+          >
+            {isMinimized ? (
+              <>
+                <span>📖 Expand Map</span>
+              </>
+            ) : (
+              <>
+                <span>📉 Minimize Map</span>
+              </>
+            )}
+          </button>
+        </div>
 
         {/* PHASE 1: NATIONAL_SHADED MODE (State-Only Shading, NO Pins) */}
         {mapMode === 'NATIONAL_SHADED' && nationalShadedData && (

@@ -20,19 +20,22 @@ export const Dashboard: React.FC = () => {
     const totalWorks = MOCK_PROJECTS.length;
     const totalSanctioned = MOCK_PROJECTS.reduce((acc, p) => acc + (p.sanctionedAmount || 0), 0) / 100000;
     const highRisk = MOCK_PROJECTS.filter(p => p.riskLevel === 'HIGH' || p.riskLevel === 'CRITICAL' || p.riskScore >= 60);
-    const similarWorks = MOCK_PROJECTS.filter(p => p.workTitle.toLowerCase().includes('pcc') || p.workTitle.toLowerCase().includes('road'));
+    const medRisk = MOCK_PROJECTS.filter(p => p.riskLevel === 'MEDIUM' || (p.riskScore >= 30 && p.riskScore < 60));
+    const lowRisk = MOCK_PROJECTS.filter(p => p.riskLevel === 'LOW' || p.riskScore < 30);
+    const similarWorks = MOCK_PROJECTS.filter(p => p.similarWorkDetected || p.workTitle.toLowerCase().includes('pcc') || p.workTitle.toLowerCase().includes('road'));
 
     setStats({
-      total_works: totalWorks || 1051,
-      total_sanctioned_amount_lakhs: totalSanctioned.toFixed(1) || '8378.2',
-      high_risk_count: highRisk.length || 6,
-      medium_risk_count: 42,
-      similar_works_count: 23
+      total_works: totalWorks,
+      total_sanctioned_amount_lakhs: totalSanctioned.toFixed(1),
+      high_risk_count: highRisk.length,
+      medium_risk_count: medRisk.length,
+      low_risk_count: lowRisk.length,
+      similar_works_count: similarWorks.length
     });
 
     setDatasetInfo({
       source_name: 'MPLADS e-SAKSHI Portal (Scored Pipeline)',
-      total_records: totalWorks || 1051,
+      total_records: totalWorks,
       total_columns: 16
     });
 

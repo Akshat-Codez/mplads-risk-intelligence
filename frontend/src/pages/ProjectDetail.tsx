@@ -198,7 +198,7 @@ export const ProjectDetail: React.FC = () => {
 
           <div className="bg-slate-50 border border-slate-200 p-4 rounded-xl text-center min-w-[160px]">
             <span className="text-[10px] text-slate-600 font-bold uppercase tracking-wider">AI Risk Score</span>
-            <h2 className="text-3xl font-extrabold text-slate-900 mt-0.5">{project.prototype_risk_score} <span className="text-sm font-normal text-slate-500">/ 100</span></h2>
+            <h2 className="text-3xl font-extrabold text-slate-900 mt-0.5">{project.prototype_risk_score ?? project.riskScore ?? 0} <span className="text-sm font-normal text-slate-500">/ 100</span></h2>
           </div>
         </div>
 

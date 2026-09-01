@@ -1,9 +1,8 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Filter, Download, RotateCcw, Building2, MapPin, AlertTriangle } from '../components/common/Icons';
+import { Search, Filter, Download, RotateCcw } from '../components/common/Icons';
 import { MOCK_PROJECTS } from '../data/mockData';
 import { useAuth } from '../context/AuthContext';
-import api from '../services/api';
 
 export const Projects: React.FC = () => {
   const navigate = useNavigate();
@@ -20,6 +19,10 @@ export const Projects: React.FC = () => {
   const [selectedRisk, setSelectedRisk] = useState('ALL');
   const [selectedCategory, setSelectedCategory] = useState('ALL');
 
+  // Pagination State
+  const [page, setPage] = useState(1);
+  const ITEMS_PER_PAGE = 15;
+
   useEffect(() => {
     if (role === 'STATE' || role === 'DISTRICT') {
       setSelectedState(user?.state || 'Karnataka');
@@ -28,6 +31,11 @@ export const Projects: React.FC = () => {
       setSelectedDistrict(user?.district || 'BENGALURU URBAN');
     }
   }, [role, user]);
+
+  // Reset pagination on filter change
+  useEffect(() => {
+    setPage(1);
+  }, [searchTerm, selectedState, selectedDistrict, selectedRisk, selectedCategory]);
 
   // Extract unique States dynamically
   const uniqueStates = useMemo(() => {
@@ -81,6 +89,18 @@ export const Projects: React.FC = () => {
     });
   }, [searchTerm, selectedState, selectedDistrict, selectedRisk, selectedCategory, role, user]);
 
+  // Sort by risk score descending
+  const sortedProjects = useMemo(() => {
+    return [...filteredProjects].sort((a, b) => b.riskScore - a.riskScore);
+  }, [filteredProjects]);
+
+  const totalPages = Math.ceil(sortedProjects.length / ITEMS_PER_PAGE) || 1;
+
+  const paginatedProjects = useMemo(() => {
+    const start = (page - 1) * ITEMS_PER_PAGE;
+    return sortedProjects.slice(start, start + ITEMS_PER_PAGE);
+  }, [sortedProjects, page]);
+
   const handleResetFilters = () => {
     setSearchTerm('');
     if (role === 'MINISTRY' || role === 'MINISTER') {
@@ -94,9 +114,9 @@ export const Projects: React.FC = () => {
   };
 
   const handleExportCSV = () => {
-    if (filteredProjects.length === 0) return;
+    if (sortedProjects.length === 0) return;
     const headers = ["Work ID", "Title", "State", "District", "Sanctioned (Rs)", "Spent (Rs)", "Vendor", "Risk Score", "Status"];
-    const rows = filteredProjects.map(p => [
+    const rows = sortedProjects.map(p => [
       `"${p.projectId}"`,
       `"${p.workTitle.replace(/"/g, '""')}"`,
       `"${p.state}"`,
@@ -123,7 +143,10 @@ export const Projects: React.FC = () => {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-slate-200 pb-4">
         <div>
           <div className="flex items-center space-x-2">
-            <h1 className="text-2xl font-black text-slate-900 font-serif">MPLADS Projects Explorer</h1>
+            <h1 className="text-2xl font-black text-slate-900 font-serif">
+              {role === 'DISTRICT' ? 'Local Works Queue' :
+               role === 'STATE' ? 'District Projects Explorer' : 'MPLADS Projects Explorer'}
+            </h1>
             <span className="bg-blue-100 text-blue-800 text-[10px] font-extrabold px-2.5 py-0.5 rounded-full border border-blue-200 uppercase">
               {role === 'DISTRICT' ? `District Scope: ${user?.district}` :
                role === 'STATE' ? `State Scope: ${user?.state}` : 'National Scope: All India'}
@@ -140,11 +163,10 @@ export const Projects: React.FC = () => {
           className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs px-4 py-2.5 rounded-lg shadow flex items-center space-x-2 transition cursor-pointer"
         >
           <Download size={15} />
-          <span>Export Filtered CSV ({filteredProjects.length})</span>
+          <span>Export Filtered CSV ({sortedProjects.length})</span>
         </button>
       </div>
 
-      {/* Filters Bar */}
       {/* Filters Bar */}
       <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4">
         <div className="flex items-center justify-between border-b border-slate-100 pb-3">
@@ -221,17 +243,18 @@ export const Projects: React.FC = () => {
             >
               <option value="ALL">⚠️ All Risk Levels</option>
               <option value="CRITICAL">🔴 Critical Risk (80-100)</option>
-              <option value="HIGH">🟠 High Risk (60-79)</option>
-              <option value="MODERATE">🟡 Moderate Risk (30-59)</option>
-              <option value="LOW">🟢 Low Risk (0-29)</option>
+              <option value="HIGH">🟠 High Risk (50-79)</option>
+              <option value="MEDIUM">🟡 Moderate Risk (25-49)</option>
+              <option value="LOW">🟢 Low Risk (0-24)</option>
             </select>
           </div>
         </div>
 
         <div className="pt-2 border-t border-slate-100 text-xs font-semibold text-slate-600">
-          Showing <strong className="text-blue-600 font-bold">{filteredProjects.length}</strong> Works for {role === 'DISTRICT' ? `District ${user?.district}` : role === 'STATE' ? `State ${user?.state}` : 'Nationwide'} Scope
+          Showing <strong className="text-blue-600 font-bold">{sortedProjects.length}</strong> Works for {role === 'DISTRICT' ? `District ${user?.district}` : role === 'STATE' ? `State ${user?.state}` : 'Nationwide'} Scope
         </div>
       </div>
+
       {/* Projects Table */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
         <table className="w-full text-left text-xs">
@@ -248,14 +271,14 @@ export const Projects: React.FC = () => {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 font-medium">
-            {filteredProjects.length === 0 ? (
+            {paginatedProjects.length === 0 ? (
               <tr>
                 <td colSpan={8} className="p-12 text-center text-slate-500 font-bold">
                   No works found for your assigned jurisdiction ({user?.state} / {user?.district}).
                 </td>
               </tr>
             ) : (
-              filteredProjects.map((p) => (
+              paginatedProjects.map((p) => (
                 <tr 
                   key={p.id} 
                   onClick={() => navigate(`/app/projects/${p.id}`)}
@@ -263,8 +286,9 @@ export const Projects: React.FC = () => {
                 >
                   <td className="p-3.5">
                     <span className={`px-2.5 py-1 rounded-full font-black text-[10px] inline-block ${
-                      p.riskLevel === 'CRITICAL' ? 'bg-red-100 text-red-800 border border-red-300' : 
-                      p.riskLevel === 'HIGH' ? 'bg-amber-100 text-amber-800 border border-amber-300' : 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                      p.riskLevel === 'CRITICAL' || p.riskLevel === 'HIGH' || p.riskScore >= 50 ? 'bg-red-100 text-red-800 border border-red-300' : 
+                      p.riskLevel === 'MEDIUM' || p.riskScore >= 25 ? 'bg-amber-100 text-amber-800 border border-amber-300' : 
+                      'bg-emerald-100 text-emerald-800 border border-emerald-300'
                     }`}>
                       {p.riskScore}/100 ({p.riskLevel})
                     </span>
@@ -306,15 +330,17 @@ export const Projects: React.FC = () => {
           <button 
             disabled={page === 1}
             onClick={() => setPage(page - 1)}
-            className="px-3 py-1 bg-white border border-slate-300 rounded font-bold text-slate-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-3.5 py-1.5 bg-white border border-slate-300 rounded-lg font-bold text-xs text-slate-700 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-100 transition shadow-sm cursor-pointer"
           >
             Previous
           </button>
-          <span className="text-slate-600 font-bold">Page {page} of {totalPages}</span>
+          <span className="text-slate-700 font-extrabold text-xs px-3">
+            Page {page} of {totalPages}
+          </span>
           <button 
             disabled={page === totalPages}
             onClick={() => setPage(page + 1)}
-            className="px-3 py-1 bg-white border border-slate-300 rounded font-bold text-slate-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-3.5 py-1.5 bg-white border border-slate-300 rounded-lg font-bold text-xs text-slate-700 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-100 transition shadow-sm cursor-pointer"
           >
             Next
           </button>

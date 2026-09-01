@@ -1,13 +1,8 @@
-import React, { useState, useMemo } from 'react';
+import React, { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Briefcase, AlertTriangle, CheckCircle2, MapPin, ArrowUpRight, ShieldAlert, FileText, Filter } from '../../components/common/Icons';
+import { MapPin } from '../../components/common/Icons';
 import { MOCK_PROJECTS } from '../../data/mockData';
 import { useAuth } from '../../context/AuthContext';
-
-const BOQ_DISTRICT_CHECK = [
-  { item: 'Community Hall Roofing Structural Steel Truss', quoted: 1450000, reference: 890000, deviation: '+62.9%', status: 'HIGH_PRICE' },
-  { item: 'Paver Blocks 80mm M40 Grade Heavy Duty', quoted: 820, reference: 540, deviation: '+51.8%', status: 'MODERATE_PRICE' }
-];
 
 export const DistrictDashboard: React.FC = () => {
   const navigate = useNavigate();
@@ -17,17 +12,19 @@ export const DistrictDashboard: React.FC = () => {
   const assignedDistrict = user?.district || 'BENGALURU URBAN';
   const assignedState = user?.state || 'Karnataka';
 
-  // Strictly filter projects belonging to THIS district ONLY
+  // Strictly filter projects belonging to THIS district ONLY and sort by risk score descending
   const districtProjects = useMemo(() => {
-    return MOCK_PROJECTS.filter(p => 
-      p.district.toUpperCase().includes(assignedDistrict.toUpperCase()) || 
-      assignedDistrict.toUpperCase().includes(p.district.toUpperCase())
-    );
+    return MOCK_PROJECTS
+      .filter(p => 
+        p.district.toUpperCase().includes(assignedDistrict.toUpperCase()) || 
+        assignedDistrict.toUpperCase().includes(p.district.toUpperCase())
+      )
+      .sort((a, b) => b.riskScore - a.riskScore);
   }, [assignedDistrict]);
 
   const totalWorks = districtProjects.length;
   const sanctionedCr = (districtProjects.reduce((acc, p) => acc + (p.sanctionedAmount || 0), 0) / 10000000).toFixed(2);
-  const localAnomalies = districtProjects.filter(p => p.riskScore >= 60 || p.riskLevel === 'HIGH' || p.riskLevel === 'CRITICAL');
+  const localAnomalies = districtProjects.filter(p => p.riskLevel === 'HIGH' || p.riskLevel === 'CRITICAL' || p.riskScore >= 50);
   const pendingReviews = districtProjects.filter(p => p.status.toLowerCase().includes('inspection') || p.status.toLowerCase().includes('pending'));
 
   const selectedGeoProject = localAnomalies[0] || districtProjects[0] || MOCK_PROJECTS[0];
@@ -72,7 +69,7 @@ export const DistrictDashboard: React.FC = () => {
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-1">
           <p className="text-xs text-slate-500 font-bold uppercase">Local Anomalies Flagged</p>
           <h3 className="text-3xl font-black text-red-600 font-serif">{localAnomalies.length} Works</h3>
-          <p className="text-[10px] text-red-500 font-bold">Risk Score ≥ 60/100</p>
+          <p className="text-[10px] text-red-500 font-bold">Risk Score ≥ 50/100 (HIGH)</p>
         </div>
 
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-1">
@@ -102,40 +99,46 @@ export const DistrictDashboard: React.FC = () => {
           )}
         </div>
 
-        {selectedGeoProject && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-slate-50 p-5 rounded-xl border border-slate-200 text-xs">
-            <div className="space-y-3">
-              <div className="space-y-1">
-                <span className="text-[10px] font-extrabold text-red-600 uppercase tracking-widest">Local High Risk Flagged Work</span>
-                <h4 className="font-bold text-slate-900 text-sm">{selectedGeoProject.workTitle}</h4>
-                <p className="text-slate-500 font-mono text-[10px]">ID: {selectedGeoProject.projectId} • {selectedGeoProject.district}</p>
+        {selectedGeoProject && (() => {
+          const regLat = selectedGeoProject.regLatitude || 12.9716;
+          const regLng = selectedGeoProject.regLongitude || 77.5946;
+          const exifLat = (regLat + 0.0756).toFixed(4);
+          const exifLng = (regLng + 0.0264).toFixed(4);
+          return (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-slate-50 p-5 rounded-xl border border-slate-200 text-xs">
+              <div className="space-y-3">
+                <div className="space-y-1">
+                  <span className="text-[10px] font-extrabold text-red-600 uppercase tracking-widest">Local High Risk Flagged Work</span>
+                  <h4 className="font-bold text-slate-900 text-sm">{selectedGeoProject.workTitle}</h4>
+                  <p className="text-slate-500 font-mono text-[10px]">ID: {selectedGeoProject.projectId} • {selectedGeoProject.district}</p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 font-mono text-[11px] pt-1">
+                  <div className="bg-emerald-50 p-2.5 rounded-lg border border-emerald-200">
+                    <span className="font-bold text-emerald-800 text-[10px] block">REGISTERED WORKSITE GPS</span>
+                    <span className="text-slate-800 font-bold">{regLat}° N, {regLng}° E</span>
+                    <span className="text-[9px] text-emerald-600 block mt-0.5 font-sans font-semibold">100m Approved Geofence Radius</span>
+                  </div>
+                  <div className="bg-red-50 p-2.5 rounded-lg border border-red-200">
+                    <span className="font-bold text-red-800 text-[10px] block">UPLOADED PHOTO EXIF GPS</span>
+                    <span className="text-slate-800 font-bold">{exifLat}° N, {exifLng}° E</span>
+                    <span className="text-[9px] text-red-600 block mt-0.5 font-sans font-bold">⚠️ 8.4 km Geofence Mismatch</span>
+                  </div>
+                </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-2 font-mono text-[11px] pt-1">
-                <div className="bg-emerald-50 p-2.5 rounded-lg border border-emerald-200">
-                  <span className="font-bold text-emerald-800 text-[10px] block">REGISTERED WORKSITE GPS</span>
-                  <span className="text-slate-800 font-bold">12.9716° N, 77.5946° E</span>
-                  <span className="text-[9px] text-emerald-600 block mt-0.5 font-sans font-semibold">100m Approved Geofence Radius</span>
-                </div>
-                <div className="bg-red-50 p-2.5 rounded-lg border border-red-200">
-                  <span className="font-bold text-red-800 text-[10px] block">UPLOADED PHOTO EXIF GPS</span>
-                  <span className="text-slate-800 font-bold">13.0472° N, 77.6210° E</span>
-                  <span className="text-[9px] text-red-600 block mt-0.5 font-sans font-bold">⚠️ 8.4 km Geofence Mismatch</span>
+              <div className="relative bg-slate-900 rounded-xl overflow-hidden min-h-[160px] flex items-center justify-center p-4 border border-slate-800 text-white">
+                <div className="text-center space-y-2">
+                  <div className="w-10 h-10 rounded-full bg-red-600/30 border border-red-500 flex items-center justify-center mx-auto text-red-400">
+                    <MapPin size={20} />
+                  </div>
+                  <span className="font-mono text-xs text-amber-300 font-bold block">DISCREPANCY DETECTED: 8.4 km OUTSIDE GEOFENCE</span>
+                  <p className="text-[10px] text-slate-300">Photo taken in secondary layout away from sanctioned site location.</p>
                 </div>
               </div>
             </div>
-
-            <div className="relative bg-slate-900 rounded-xl overflow-hidden min-h-[160px] flex items-center justify-center p-4 border border-slate-800 text-white">
-              <div className="text-center space-y-2">
-                <div className="w-10 h-10 rounded-full bg-red-600/30 border border-red-500 flex items-center justify-center mx-auto text-red-400">
-                  <MapPin size={20} />
-                </div>
-                <span className="font-mono text-xs text-amber-300 font-bold block">DISCREPANCY DETECTED: 8.4 km OUTSIDE GEOFENCE</span>
-                <p className="text-[10px] text-slate-300">Photo taken in secondary layout away from sanctioned site location.</p>
-              </div>
-            </div>
-          </div>
-        )}
+          );
+        })()}
       </div>
 
       {/* Local District Works Table */}
@@ -175,8 +178,9 @@ export const DistrictDashboard: React.FC = () => {
                   </td>
                   <td className="p-3">
                     <span className={`px-2 py-0.5 rounded font-black text-[10px] ${
-                      p.riskLevel === 'CRITICAL' ? 'bg-red-100 text-red-800' :
-                      p.riskLevel === 'HIGH' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'
+                      p.riskLevel === 'CRITICAL' || p.riskLevel === 'HIGH' || p.riskScore >= 50 ? 'bg-red-100 text-red-800 border border-red-200' :
+                      p.riskLevel === 'MEDIUM' || p.riskScore >= 25 ? 'bg-amber-100 text-amber-800 border border-amber-200' :
+                      'bg-emerald-100 text-emerald-800 border border-emerald-200'
                     }`}>
                       {p.riskScore}/100 ({p.riskLevel})
                     </span>

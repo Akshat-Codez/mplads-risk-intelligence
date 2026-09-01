@@ -89,6 +89,51 @@ model Project {
   contractorRiskLevel     String?    @default("LOW")
   contractorSignals       String?    // JSON string
 
+  // 7-Dimension: Progress Risk
+  progressRiskScore       Float?     @default(0)
+  progressRiskLevel       String?    @default("LOW")
+  progressSignals         String?    // JSON string
+
+  // 7-Dimension: GIS / Geographic Risk
+  gisRiskScore            Float?     @default(0)
+  gisRiskLevel            String?    @default("LOW")
+  gisSignals              String?    // JSON string
+
+  // 7-Dimension: Documentation / Compliance Risk
+  documentationRiskScore  Float?     @default(0)
+  documentationRiskLevel  String?    @default("LOW")
+  documentationSignals    String?    // JSON string
+
+  // 7-Dimension: Cross-Signal Anomaly Risk
+  crossSignalScore        Float?     @default(0)
+  crossSignalLevel        String?    @default("LOW")
+  crossSignals            String?    // JSON string
+
+  // Progress Data Fields
+  physicalProgress        Float?     // 0-100 percentage
+  financialProgress       Float?     // 0-100 percentage
+  plannedStartDate        String?
+  plannedCompletionDate   String?
+  workOrderDate           String?
+  stagnationDays          Float?     @default(0)
+  revisedEstimatesCount   Int?       @default(0)
+  progressTimeline        String?    // JSON: [{date, physical%, financial%, milestone}]
+
+  // GIS / Geographic Data Fields
+  latitude                Float?
+  longitude               Float?
+
+  // Documentation Checklist
+  documentsChecklist      String?    // JSON: {aa:bool, ts:bool, estimate:bool, boq:bool, tender:bool, workOrder:bool, mb:bool, bills:bool, uc:bool, cc:bool, inspection:bool, photos:bool}
+  documentCompleteness    Float?     @default(0) // 0-100%
+
+  // Aggregated Explainability & Confidence
+  confidenceScore         Float?     @default(50)
+  dataCompleteness        Float?     @default(0)  // 0-100%
+  topRiskFactors          String?    // JSON: [{factor, engine, points, evidence}]
+  recommendedActions      String?    // JSON: [{action, priority, reason}]
+  missingDataList         String?    // JSON: [{field, engine, impact}]
+
   // ML Signals
   peerMedianAmount        Float?
   peerDeviation           Float?

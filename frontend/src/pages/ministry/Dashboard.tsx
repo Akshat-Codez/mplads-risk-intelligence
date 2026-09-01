@@ -120,8 +120,8 @@ export const Dashboard: React.FC = () => {
                setStats(statsRes.data);
                setDatasetInfo(infoRes.data);
                await fetchWorks();
-            } catch (e) {
-               alert("Failed to run analysis");
+            } catch (e: any) {
+               alert(e.response?.data?.error || "AI Analysis could not be completed. Please try again.");
             } finally {
                setLoading(false);
             }
@@ -192,6 +192,52 @@ export const Dashboard: React.FC = () => {
             <div className="whitespace-pre-wrap font-sans text-xs">
               {aiSummary.summaryMarkdown}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* 7-Dimension Portfolio Risk Radar */}
+      {stats?.dimensionAverages && (
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 space-y-4">
+          <div className="flex justify-between items-center border-b pb-3">
+            <div>
+              <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                📊 7-Dimension Portfolio Risk Intelligence
+              </h3>
+              <p className="text-xs text-slate-500">Average risk scores across all {stats.total_works} scoped projects</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-2.5 py-1 rounded-full">
+                Avg Confidence: {stats.dimensionAverages.confidence}%
+              </span>
+              <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-2.5 py-1 rounded-full">
+                Data Completeness: {stats.dimensionAverages.dataCompleteness}%
+              </span>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3">
+            {[
+              { label: 'Financial Risk', key: 'financial', weight: '20%' },
+              { label: 'Progress Risk', key: 'progress', weight: '20%' },
+              { label: 'Procurement Risk', key: 'procurement', weight: '15%' },
+              { label: 'Contractor Risk', key: 'contractor', weight: '15%' },
+              { label: 'Geographic Risk', key: 'gis', weight: '10%' },
+              { label: 'Documentation Risk', key: 'documentation', weight: '10%' },
+              { label: 'Cross-Signal Risk', key: 'crossSignal', weight: '10%' }
+            ].map(dim => {
+              const val = stats.dimensionAverages[dim.key] || 0;
+              const color = val >= 50 ? 'bg-red-500' : val >= 25 ? 'bg-amber-500' : 'bg-emerald-500';
+              const textColor = val >= 50 ? 'text-red-700' : val >= 25 ? 'text-amber-700' : 'text-emerald-700';
+              return (
+                <div key={dim.key} className="flex items-center gap-3">
+                  <span className="text-[11px] font-semibold text-slate-600 w-36 shrink-0">{dim.label} <span className="text-slate-400 font-normal">({dim.weight})</span></span>
+                  <div className="flex-1 bg-slate-100 rounded-full h-2.5 overflow-hidden">
+                    <div className={`${color} h-full rounded-full transition-all`} style={{ width: `${Math.min(100, val)}%` }} />
+                  </div>
+                  <span className={`text-xs font-bold ${textColor} w-10 text-right`}>{val.toFixed(1)}</span>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
@@ -337,45 +383,55 @@ export const Dashboard: React.FC = () => {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-200">
-            {highRiskWorks.map(w => (
-              <React.Fragment key={w.work_id}>
-                <tr className={`hover:bg-slate-50 ${expandedRow === w.work_id ? 'bg-slate-50' : ''}`}>
-                  <td className="p-3">
-                    <p className="font-bold text-slate-900">{w.work_description}</p>
-                    <p className="font-mono text-[10px] text-slate-500">{w.work_id}</p>
-                  </td>
-                  <td className="p-3 text-slate-700">{w.district}</td>
-                  <td className="p-3 font-semibold text-slate-900">₹{(w.sanctioned_amount / 100000).toFixed(1)} L</td>
-                  <td className="p-3">
-                    <span className="font-bold text-red-600">{w.prototype_risk_score}/100</span>
-                    <span className="block text-[10px] text-red-500 font-semibold">HIGH</span>
-                  </td>
-                  <td className="p-3 font-semibold text-slate-700">
-                    {w.risk_evidence_explanation.split(' | ')[0] || "Anomaly"}
-                  </td>
-                  <td className="p-3">
-                    <div className="flex items-center space-x-2">
-                      <button 
-                        onClick={() => navigate(`/projects/${encodeURIComponent(w.work_id || w.projectId)}`)}
-                        className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[11px] px-2.5 py-1 rounded transition flex items-center gap-1"
-                      >
-                        <span>Open Dossier</span>
-                        <ArrowRight size={12} />
-                      </button>
-                      <button 
-                        onClick={() => setExpandedRow(expandedRow === w.work_id ? null : w.work_id)} 
-                        className="bg-slate-200 text-slate-800 font-bold text-[11px] px-2.5 py-1 rounded hover:bg-slate-300 transition"
-                      >
-                        {expandedRow === w.work_id ? 'Hide ▲' : 'Details ▼'}
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-                {expandedRow === w.work_id && (
-                  <tr>
-                    <td colSpan={6} className="p-0 border-b border-slate-200">
-                      <div className="bg-slate-50 p-6 shadow-inner border-l-4 border-l-red-600">
-                        <div className="flex justify-between items-start mb-6">
+            {highRiskWorks.length === 0 ? (
+              <tr>
+                <td colSpan={6} className="p-8 text-center text-slate-500 font-medium bg-slate-50/50">
+                  <div className="space-y-1">
+                    <p className="text-slate-700 font-bold">No High Risk Works Flagged</p>
+                    <p className="text-[11px] text-slate-400">All projects in this jurisdiction are currently evaluated within normal or medium risk parameters.</p>
+                  </div>
+                </td>
+              </tr>
+            ) : (
+              highRiskWorks.map(w => (
+                <React.Fragment key={w.work_id || w.projectId}>
+                  <tr className={`hover:bg-slate-50 ${expandedRow === (w.work_id || w.projectId) ? 'bg-slate-50' : ''}`}>
+                    <td className="p-3">
+                      <p className="font-bold text-slate-900">{w.work_description}</p>
+                      <p className="font-mono text-[10px] text-slate-500">{w.work_id || w.projectId}</p>
+                    </td>
+                    <td className="p-3 text-slate-700">{w.district}</td>
+                    <td className="p-3 font-semibold text-slate-900">₹{((w.sanctioned_amount || 0) / 100000).toFixed(1)} L</td>
+                    <td className="p-3">
+                      <span className="font-bold text-red-600">{w.prototype_risk_score || w.riskScore || 0}/100</span>
+                      <span className="block text-[10px] text-red-500 font-semibold">{w.risk_level || w.riskLevel || 'HIGH'}</span>
+                    </td>
+                    <td className="p-3 font-semibold text-slate-700">
+                      {(w.risk_evidence_explanation || 'Anomaly').split(' | ')[0]}
+                    </td>
+                    <td className="p-3">
+                      <div className="flex items-center space-x-2">
+                        <button 
+                          onClick={() => navigate(`/projects/${encodeURIComponent(w.work_id || w.projectId)}`)}
+                          className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[11px] px-2.5 py-1 rounded transition flex items-center gap-1"
+                        >
+                          <span>Open Dossier</span>
+                          <ArrowRight size={12} />
+                        </button>
+                        <button 
+                          onClick={() => setExpandedRow(expandedRow === (w.work_id || w.projectId) ? null : (w.work_id || w.projectId))} 
+                          className="bg-slate-200 text-slate-800 font-bold text-[11px] px-2.5 py-1 rounded hover:bg-slate-300 transition"
+                        >
+                          {expandedRow === (w.work_id || w.projectId) ? 'Hide ▲' : 'Details ▼'}
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                  {expandedRow === (w.work_id || w.projectId) && (
+                    <tr>
+                      <td colSpan={6} className="p-0 border-b border-slate-200">
+                        <div className="bg-slate-50 p-6 shadow-inner border-l-4 border-l-red-600">
+                          <div className="flex justify-between items-start mb-6">
                            <div>
                               <h4 className="text-sm font-extrabold text-slate-900 uppercase">Work Analysis</h4>
                               <p className="text-xs text-slate-500 mt-1">Prototype Risk Score is a prioritization signal for human review, not proof of fraud.</p>
@@ -482,7 +538,7 @@ export const Dashboard: React.FC = () => {
                   </tr>
                 )}
               </React.Fragment>
-            ))}
+            )))}
           </tbody>
         </table>
       </div>

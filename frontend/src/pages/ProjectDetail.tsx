@@ -20,6 +20,17 @@ export const ProjectDetail: React.FC = () => {
   const [submittingFeedback, setSubmittingFeedback] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
+  const [analysisError, setAnalysisError] = useState<string | null>(null);
+  const [activeAccordion, setActiveAccordion] = useState<string | null>(null);
+
+  const formatSignal = (sig: any): string => {
+    if (!sig) return '';
+    if (typeof sig === 'string') return sig;
+    if (typeof sig === 'object') {
+      return sig.description || sig.signal || sig.factor || sig.evidence || JSON.stringify(sig);
+    }
+    return String(sig);
+  };
 
   const fetchFeedbackHistory = async () => {
     try {
@@ -128,6 +139,7 @@ export const ProjectDetail: React.FC = () => {
 
   const handleAnalyze = async (documentId: string) => {
     setAnalyzing(true);
+    setAnalysisError(null);
     try {
       const res = await api.post(`/procurement/${documentId}/analyze`);
       setProcurementDoc(res.data.data);
@@ -137,7 +149,8 @@ export const ProjectDetail: React.FC = () => {
       const projRes = await api.get(`/projects/${encodedId}`);
       setProject(projRes.data);
     } catch (err: any) {
-      alert(err.response?.data?.error || 'Failed to run analysis');
+      const msg = err.response?.data?.error || 'AI Analysis service is temporarily unavailable. Please verify the AI microservice is running.';
+      setAnalysisError(msg);
     } finally {
       setAnalyzing(false);
     }
@@ -232,6 +245,200 @@ export const ProjectDetail: React.FC = () => {
         </div>
       )}
 
+      {/* 7-Dimension Risk Radar Section */}
+      <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-4">
+        <h3 className="text-base font-bold text-slate-900 border-b pb-3">7-Dimension Risk Intelligence Analysis</h3>
+        <div className="space-y-3">
+          {[
+            { label: 'Financial Risk', score: project.financial_risk_score },
+            { label: 'Procurement Risk', score: project.procurement_risk_score },
+            { label: 'Progress Risk', score: project.progress_risk_score },
+            { label: 'Contractor Risk', score: project.contractor_risk_score },
+            { label: 'Geographic Risk', score: project.gis_risk_score },
+            { label: 'Documentation Risk', score: project.documentation_risk_score },
+            { label: 'Cross-Signal Risk', score: project.cross_signal_score },
+          ].map((dim, i) => (
+            <div key={i} className="flex items-center text-xs">
+              <span className="w-1/3 font-medium text-slate-700">{dim.label}</span>
+              <div className="w-2/3 flex items-center gap-3">
+                <div className="flex-1 bg-slate-100 rounded-full h-2.5 overflow-hidden">
+                  <div 
+                    className={`h-full rounded-full ${
+                      (dim.score || 0) >= 50 ? 'bg-red-500' : (dim.score || 0) >= 25 ? 'bg-amber-500' : 'bg-green-500'
+                    }`}
+                    style={{ width: `${Math.min(Math.max(dim.score || 0, 0), 100)}%` }}
+                  ></div>
+                </div>
+                <span className="w-8 text-right font-bold text-slate-600">{dim.score || 0}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className="flex justify-between items-center bg-slate-50 p-4 rounded-lg mt-4 text-xs font-bold text-slate-800">
+          <span>Overall AI Score: {project.prototype_risk_score || 0}/100</span>
+          <span>Data Completeness: {project.data_completeness || 0}%</span>
+        </div>
+      </div>
+
+      {/* Top 5 Contributing Risk Factors */}
+      {project.top_risk_factors && project.top_risk_factors.length > 0 && (
+        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-4">
+          <h3 className="text-base font-bold text-slate-900 border-b pb-3">Top 5 Contributing Risk Factors</h3>
+          <div className="space-y-3">
+            {[...project.top_risk_factors]
+              .sort((a: any, b: any) => b.points - a.points)
+              .slice(0, 5)
+              .map((factor: any, i: number) => (
+              <div key={i} className="bg-slate-50 p-3 rounded-lg border border-slate-100 flex flex-col sm:flex-row gap-3 items-start sm:items-center">
+                <div className="flex-1 space-y-1">
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-slate-800 text-sm">{factor.factor}</span>
+                    <span className="bg-indigo-100 text-indigo-700 text-[10px] px-2 py-0.5 rounded font-semibold uppercase">{factor.engine}</span>
+                  </div>
+                  <p className="text-xs text-slate-500">{factor.evidence}</p>
+                </div>
+                <span className="text-red-600 font-extrabold text-sm whitespace-nowrap">+{factor.points} pts</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Explainability Accordion */}
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="p-6 border-b border-slate-200">
+          <h3 className="text-base font-bold text-slate-900">Intelligence Explainability & Recommendations</h3>
+        </div>
+        
+        {/* Accordion 1: Evidence & Supporting Data */}
+        <div className="border-b border-slate-100">
+          <button 
+            className="w-full text-left px-6 py-4 font-bold text-sm text-slate-800 hover:bg-slate-50 flex justify-between items-center transition"
+            onClick={() => setActiveAccordion(activeAccordion === 'evidence' ? null : 'evidence')}
+          >
+            <span>Evidence & Supporting Data by Dimension</span>
+            <span className="text-slate-400">{activeAccordion === 'evidence' ? '−' : '+'}</span>
+          </button>
+          {activeAccordion === 'evidence' && (
+            <div className="px-6 pb-5 pt-1 text-xs text-slate-600 space-y-4">
+              {[
+                { title: 'Financial Signals', data: project.financial_signals_parsed },
+                { title: 'Progress Signals', data: project.progress_signals_parsed },
+                { title: 'Documentation Signals', data: project.documentation_signals_parsed },
+                { title: 'Cross Signals', data: project.cross_signals_parsed },
+                { title: 'Contractor Signals', data: project.contractor_signals_parsed },
+                { title: 'GIS Signals', data: project.gis_signals_parsed },
+                { title: 'Procurement Signals', data: project.procurement_signals_parsed }
+              ].map((section, i) => (
+                section.data && section.data.length > 0 && (
+                  <div key={i} className="space-y-1">
+                    <span className="font-bold text-slate-700 block">{section.title}</span>
+                    <ul className="list-disc pl-5 space-y-1 text-slate-500">
+                      {section.data.map((sig: any, j: number) => <li key={j}>{formatSignal(sig)}</li>)}
+                    </ul>
+                  </div>
+                )
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Accordion 2: Data Used vs Missing */}
+        <div className="border-b border-slate-100">
+          <button 
+            className="w-full text-left px-6 py-4 font-bold text-sm text-slate-800 hover:bg-slate-50 flex justify-between items-center transition"
+            onClick={() => setActiveAccordion(activeAccordion === 'data' ? null : 'data')}
+          >
+            <span>Data Analysis & Missing Sources</span>
+            <span className="text-slate-400">{activeAccordion === 'data' ? '−' : '+'}</span>
+          </button>
+          {activeAccordion === 'data' && (
+            <div className="px-6 pb-5 pt-1 text-xs space-y-2">
+              <p className="text-slate-600 font-medium mb-3">The following critical data sources were missing and not factored into the analysis:</p>
+              <div className="flex flex-wrap gap-2">
+                {project.missing_data_list && project.missing_data_list.length > 0 ? (
+                  project.missing_data_list.map((item: string, i: number) => (
+                    <span key={i} className="bg-amber-100 text-amber-800 border border-amber-200 px-3 py-1 rounded-full font-semibold">
+                      {item}
+                    </span>
+                  ))
+                ) : (
+                  <span className="text-green-600 font-medium">All critical data sources are present.</span>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Accordion 3: Recommended Administrative Actions */}
+        <div>
+          <button 
+            className="w-full text-left px-6 py-4 font-bold text-sm text-slate-800 hover:bg-slate-50 flex justify-between items-center transition"
+            onClick={() => setActiveAccordion(activeAccordion === 'actions' ? null : 'actions')}
+          >
+            <span>Recommended Administrative Actions</span>
+            <span className="text-slate-400">{activeAccordion === 'actions' ? '−' : '+'}</span>
+          </button>
+          {activeAccordion === 'actions' && (
+            <div className="px-6 pb-5 pt-1 text-xs space-y-3">
+              {project.recommended_actions && project.recommended_actions.length > 0 ? (
+                project.recommended_actions.map((action: any, i: number) => (
+                  <div key={i} className="bg-slate-50 p-3 rounded-lg border border-slate-200 flex flex-col space-y-2">
+                    <div className="flex items-center gap-2">
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                        action.priority === 'CRITICAL' ? 'bg-red-100 text-red-700' :
+                        action.priority === 'HIGH' ? 'bg-amber-100 text-amber-700' :
+                        action.priority === 'MEDIUM' ? 'bg-blue-100 text-blue-700' :
+                        'bg-green-100 text-green-700'
+                      }`}>{action.priority}</span>
+                      <span className="font-bold text-slate-800">{action.action}</span>
+                    </div>
+                    <p className="text-slate-600 ml-1">{action.reason} <span className="italic text-[10px] text-slate-400">({action.engine})</span></p>
+                  </div>
+                ))
+              ) : (
+                <p className="text-slate-500 italic">No specific actions recommended at this time.</p>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Document Compliance Checklist */}
+      {project.documents_checklist && (
+        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-4">
+          <div className="flex justify-between items-center border-b pb-3">
+            <h3 className="text-base font-bold text-slate-900">Document Compliance Checklist</h3>
+            <span className="text-xs font-bold bg-indigo-50 text-indigo-700 px-3 py-1 rounded-full border border-indigo-100">
+              Completeness: {project.document_completeness || 0}%
+            </span>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
+            {[
+              { key: 'aa', label: 'Admin Approval (AA)' },
+              { key: 'ts', label: 'Tech Sanction (TS)' },
+              { key: 'estimate', label: 'Detailed Estimate' },
+              { key: 'boq', label: 'Bill of Quantities (BOQ)' },
+              { key: 'tender', label: 'Tender Document' },
+              { key: 'workOrder', label: 'Work Order' },
+              { key: 'mb', label: 'Measurement Book (MB)' },
+              { key: 'bills', label: 'Running/Final Bills' },
+              { key: 'uc', label: 'Utilisation Cert (UC)' },
+              { key: 'cc', label: 'Completion Cert (CC)' },
+              { key: 'inspection', label: 'Inspection Report' },
+              { key: 'photos', label: 'Site Photographs' }
+            ].map((doc) => (
+              <div key={doc.key} className="flex items-center gap-2 p-2 bg-slate-50 rounded border border-slate-100">
+                <span className="text-base">{project.documents_checklist[doc.key] ? '✅' : '❌'}</span>
+                <span className={`font-medium ${project.documents_checklist[doc.key] ? 'text-slate-800' : 'text-slate-400'}`}>
+                  {doc.label}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Associated Contractor & Compatibility Card */}
       {project.vendorName && (
         <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-4">
@@ -260,8 +467,8 @@ export const ProjectDetail: React.FC = () => {
                   <p className="text-green-600 font-medium">No contractor concentration or type compatibility signals triggered.</p>
                 ) : (
                   <ul className="list-disc pl-5 space-y-1 text-slate-600 font-medium">
-                    {project.contractor_risk.signals.map((sig: string, i: number) => (
-                      <li key={i}>{sig}</li>
+                    {project.contractor_risk.signals.map((sig: any, i: number) => (
+                      <li key={i}>{formatSignal(sig)}</li>
                     ))}
                   </ul>
                 )}
@@ -277,7 +484,7 @@ export const ProjectDetail: React.FC = () => {
         <div className="grid grid-cols-1 gap-4">
             <div className="bg-white p-5 rounded-xl border-l-4 border-l-red-600 border border-slate-200 shadow-sm space-y-2 text-sm">
               <ul className="list-disc pl-5 space-y-2 text-slate-700 font-medium">
-                {project.risk_evidence_explanation.split(' | ').map((reason: string, i: number) => (
+                {(project.risk_evidence_explanation || 'No unusual patterns detected.').split(' | ').map((reason: string, i: number) => (
                     <li key={i}>{reason}</li>
                 ))}
               </ul>
@@ -304,6 +511,27 @@ export const ProjectDetail: React.FC = () => {
             </label>
           </div>
         </div>
+
+        {analysisError && (
+          <div className="p-4 bg-amber-50 border border-amber-300 rounded-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
+            <div className="flex items-center gap-2">
+              <span className="text-amber-600 font-bold text-sm">⚠️</span>
+              <div>
+                <p className="font-bold text-amber-900">AI Analysis Temporarily Unavailable</p>
+                <p className="text-amber-700">{analysisError}</p>
+              </div>
+            </div>
+            {procurementDoc && procurementDoc.id && (
+              <button
+                onClick={() => handleAnalyze(procurementDoc.id)}
+                disabled={analyzing}
+                className="bg-amber-600 hover:bg-amber-700 text-white font-bold px-3 py-1.5 rounded-lg text-xs transition shrink-0"
+              >
+                {analyzing ? 'Retrying...' : 'Retry Analysis'}
+              </button>
+            )}
+          </div>
+        )}
 
         {analyzing && (
           <div className="p-8 text-center text-slate-600 font-semibold space-y-3">
@@ -368,15 +596,27 @@ export const ProjectDetail: React.FC = () => {
 
               <div className="md:col-span-2 bg-slate-50 border border-slate-200 p-4 rounded-xl text-xs space-y-2">
                 <span className="font-bold text-slate-700 block">Procurement Risk Signals</span>
-                {project.procurementSignals || project.procurement_signals ? (
-                  <ul className="list-disc pl-5 space-y-1 text-slate-600 font-medium">
-                    {JSON.parse(project.procurementSignals || project.procurement_signals).map((signal: string, i: number) => (
-                      <li key={i}>{signal}</li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="text-slate-400 font-medium">No procurement anomalies or warnings identified.</p>
-                )}
+                {(() => {
+                  let signals = [];
+                  const raw = project.procurementSignals || project.procurement_signals;
+                  if (raw) {
+                    try {
+                      signals = typeof raw === 'string' ? JSON.parse(raw) : raw;
+                    } catch (e) {
+                      signals = [];
+                    }
+                  }
+                  if (Array.isArray(signals) && signals.length > 0) {
+                    return (
+                      <ul className="list-disc pl-5 space-y-1 text-slate-600 font-medium">
+                        {signals.map((signal: any, i: number) => (
+                          <li key={i}>{formatSignal(signal)}</li>
+                        ))}
+                      </ul>
+                    );
+                  }
+                  return <p className="text-slate-400 font-medium">No procurement anomalies or warnings identified.</p>;
+                })()}
               </div>
             </div>
 

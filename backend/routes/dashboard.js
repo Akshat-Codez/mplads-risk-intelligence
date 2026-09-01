@@ -85,6 +85,22 @@ router.get('/summary', authMiddleware, async (req, res) => {
         ]
       }
     });
+    // Compute 7-dimension risk averages
+    const dimensionAverages = await prisma.project.aggregate({
+      where,
+      _avg: {
+        financialRiskScore: true,
+        procurementRiskScore: true,
+        progressRiskScore: true,
+        contractorRiskScore: true,
+        gisRiskScore: true,
+        documentationRiskScore: true,
+        crossSignalScore: true,
+        confidenceScore: true,
+        dataCompleteness: true,
+        riskScore: true
+      }
+    });
 
     res.json({
       totalProjects,
@@ -95,6 +111,20 @@ router.get('/summary', authMiddleware, async (req, res) => {
       totalExpenditure: aggregations._sum.totalDisbursed || 0,
       similarWorks,
       delayedWorks,
+
+      // 7-Dimension Risk Averages
+      dimensionAverages: {
+        financial: Math.round((dimensionAverages._avg.financialRiskScore || 0) * 10) / 10,
+        procurement: Math.round((dimensionAverages._avg.procurementRiskScore || 0) * 10) / 10,
+        progress: Math.round((dimensionAverages._avg.progressRiskScore || 0) * 10) / 10,
+        contractor: Math.round((dimensionAverages._avg.contractorRiskScore || 0) * 10) / 10,
+        gis: Math.round((dimensionAverages._avg.gisRiskScore || 0) * 10) / 10,
+        documentation: Math.round((dimensionAverages._avg.documentationRiskScore || 0) * 10) / 10,
+        crossSignal: Math.round((dimensionAverages._avg.crossSignalScore || 0) * 10) / 10,
+        overall: Math.round((dimensionAverages._avg.riskScore || 0) * 10) / 10,
+        confidence: Math.round((dimensionAverages._avg.confidenceScore || 0) * 10) / 10,
+        dataCompleteness: Math.round((dimensionAverages._avg.dataCompleteness || 0) * 10) / 10
+      },
 
       // Frontend compatibility aliases (snake_case)
       total_works: totalProjects,
@@ -125,7 +155,7 @@ router.get('/dataset-info', authMiddleware, async (req, res) => {
         'expenditureRatio', 'sanctionDelayDays', 'completionDurationDays', 
         'paymentCount', 'vendorName', 'riskScore', 'riskLevel'
       ],
-      hasGeolocation: false,
+      hasGeolocation: true,
 
       // Frontend compatibility aliases
       available_fields: '16 columns',

@@ -26,10 +26,15 @@ export function invalidateCache() {
 async function callGemini(systemPrompt, userPrompt) {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
+    console.log('[AI DEBUG] GEMINI_API_KEY not configured. Using deterministic structured AI briefing engine.');
     return null; // Triggers deterministic fallback
   }
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+  const model = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+  console.log('[AI DEBUG] AI provider: Google Gemini LLM');
+  console.log('[AI DEBUG] AI model:', model);
+  console.log('[AI DEBUG] Calling AI service endpoint...');
   
   try {
     const controller = new AbortController();
@@ -56,17 +61,19 @@ async function callGemini(systemPrompt, userPrompt) {
     });
 
     clearTimeout(timeoutId);
+    console.log('[AI DEBUG] AI response status:', res.status);
 
     if (!res.ok) {
-      console.warn(`Gemini API returned status ${res.status}. Using deterministic fallback.`);
+      console.warn(`[AI DEBUG] Gemini API returned status ${res.status}. Using deterministic fallback.`);
       return null;
     }
 
     const data = await res.json();
     const candidate = data.candidates?.[0]?.content?.parts?.[0]?.text;
+    console.log('[AI DEBUG] AI response received successfully.');
     return candidate ? candidate.trim() : null;
   } catch (err) {
-    console.warn(`Gemini API call failed: ${err.message}. Using deterministic fallback.`);
+    console.warn(`[AI DEBUG] Gemini API call failed: ${err.message}. Using deterministic fallback.`);
     return null;
   }
 }

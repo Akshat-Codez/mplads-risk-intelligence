@@ -2,9 +2,44 @@ import os
 import glob
 import pandas as pd
 import numpy as np
+import hashlib
 
 RAW_DIR = 'data/raw'
 PROCESSED_DIR = 'data/processed'
+
+# State normalization map — handles folder names and raw CSV values
+STATE_NORMALIZE = {
+    'chhattisgarh': 'Chhattisgarh',
+    'chattisgarh': 'Chhattisgarh',
+    'delhi': 'Delhi',
+    'gujarat': 'Gujarat',
+    'gujrat': 'Gujarat',
+    'himachal pradesh': 'Himachal Pradesh',
+    'hp': 'Himachal Pradesh',
+    'madhya pradesh': 'Madhya Pradesh',
+    'mp': 'Madhya Pradesh',
+    'rajasthan': 'Rajasthan',
+    'uttar pradesh': 'Uttar Pradesh',
+    'up': 'Uttar Pradesh',
+    'uttarakhand': 'Uttarakhand',
+    'uttrakhand': 'Uttarakhand',
+    'bihar': 'Bihar',
+    'karnataka': 'Karnataka',
+    'kerala': 'Kerala',
+    'nagaland': 'Nagaland',
+    'maharashtra': 'Maharashtra',
+}
+
+def normalize_state(val):
+    if pd.isna(val):
+        return np.nan
+    val_str = str(val).strip()
+    # Remove non-breaking spaces and control chars
+    val_str = val_str.replace('\xa0', '').strip()
+    if not val_str:
+        return np.nan
+    lookup = val_str.lower().strip()
+    return STATE_NORMALIZE.get(lookup, val_str)
 
 def clean_currency(val):
     if pd.isna(val):
@@ -12,14 +47,14 @@ def clean_currency(val):
     if isinstance(val, (int, float)):
         return val
     # Remove commas and weird characters
-    val = str(val).replace(',', '').strip()
+    val = str(val).replace(',', '').replace('\xa0', '').strip()
     try:
         return float(val)
     except ValueError:
         return np.nan
 
 def clean_date(val):
-    if pd.isna(val) or str(val).strip() == '':
+    if pd.isna(val) or str(val).strip() == '' or str(val).strip() == '\xa0':
         return pd.NaT
     try:
         return pd.to_datetime(val, errors='coerce')
@@ -44,16 +79,29 @@ def extract_work_id(val):
 def extract_district(val):
     if pd.isna(val):
         return np.nan
-    val_str = str(val)
+    val_str = str(val).strip().replace('\xa0', '').strip()
+    if not val_str:
+        return np.nan
     if '(' in val_str:
-        return val_str.split('(')[0].strip()
-    return val_str.strip()
+        return val_str.split('(')[0].strip().upper()
+    return val_str.strip().upper()
+
+def generate_na_work_id(row_data, folder_name, index):
+    """Generate a deterministic unique ID for NA/unsanctioned records."""
+    # Use folder + index + hash of description for uniqueness
+    desc = str(row_data.get('work_description', ''))
+    state = str(row_data.get('state', ''))
+    district = str(row_data.get('district', ''))
+    raw = f"{folder_name}_{index}_{state}_{district}_{desc}"
+    short_hash = hashlib.md5(raw.encode()).hexdigest()[:8]
+    return f"NA/{folder_name}/{index}/{short_hash}"
 
 def process_mp_folder(mp_path):
     print(f"Processing {mp_path}...")
+    folder_name = os.path.basename(mp_path)
     
     # 1. Recommended
-    rec_files = glob.glob(os.path.join(mp_path, 'Recommend*.csv'))
+    rec_files = glob.glob(os.path.join(mp_path, '*[Rr]ecommend*.csv'))
     df_rec = pd.DataFrame()
     if rec_files:
         df_rec = pd.read_csv(rec_files[0], encoding='utf-8', encoding_errors='replace')
@@ -68,9 +116,10 @@ def process_mp_folder(mp_path):
             elif 'recommended date' in cl: col_map[c] = 'recommendation_date'
             elif 'work category' in cl: col_map[c] = 'work_type'
             elif cl == 'work': col_map[c] = 'work_id'
-            elif 'elected' in cl or 'constituency' in cl: col_map[c] = 'constituency'
+            elif 'elected' in cl or 'nominated' in cl: col_map[c] = 'constituency'
+            elif 'constituency' in cl: col_map[c] = 'constituency'
             elif 'parliament' in cl: col_map[c] = 'mp_name'
-            elif 'state' in cl: col_map[c] = 'state'
+            elif 'state' in cl and 'work' not in cl: col_map[c] = 'state'
             elif 'ida' in cl: col_map[c] = 'district'
             
         df_rec = df_rec.rename(columns=col_map)
@@ -78,15 +127,26 @@ def process_mp_folder(mp_path):
             df_rec['work_id'] = df_rec['work_id'].apply(extract_work_id)
         if 'district' in df_rec.columns:
             df_rec['district'] = df_rec['district'].apply(extract_district)
+        if 'state' in df_rec.columns:
+            df_rec['state'] = df_rec['state'].apply(normalize_state)
         if 'recommended_amount' in df_rec.columns:
             df_rec['recommended_amount'] = df_rec['recommended_amount'].apply(clean_currency)
         if 'recommendation_date' in df_rec.columns:
             df_rec['recommendation_date'] = df_rec['recommendation_date'].apply(clean_date)
         if 'sanction_date' in df_rec.columns:
             df_rec['sanction_date'] = df_rec['sanction_date'].apply(clean_date)
+        
+        # Handle NA work IDs - generate synthetic unique IDs
+        if 'work_id' in df_rec.columns:
+            na_mask = df_rec['work_id'].isna() | df_rec['work_id'].apply(
+                lambda x: str(x).strip().upper().startswith('NA') if pd.notna(x) else True
+            )
+            for idx in df_rec[na_mask].index:
+                row = df_rec.loc[idx]
+                df_rec.at[idx, 'work_id'] = generate_na_work_id(row, folder_name, idx)
 
     # 2. Sanctioned
-    sanc_files = glob.glob(os.path.join(mp_path, 'Sanctioned*.csv'))
+    sanc_files = glob.glob(os.path.join(mp_path, '*[Ss]anctioned*.csv'))
     df_sanc = pd.DataFrame()
     if sanc_files:
         df_sanc = pd.read_csv(sanc_files[0], encoding='utf-8', encoding_errors='replace')
@@ -108,7 +168,7 @@ def process_mp_folder(mp_path):
         df_sanc = df_sanc[[c for c in keep_cols if c in df_sanc.columns]]
 
     # 3. Expenditure
-    exp_files = glob.glob(os.path.join(mp_path, 'Expenditure*.csv'))
+    exp_files = glob.glob(os.path.join(mp_path, '*[Ee]xpenditure*.csv'))
     df_exp_agg = pd.DataFrame()
     if exp_files:
         df_exp = pd.read_csv(exp_files[0], encoding='utf-8', encoding_errors='replace')
@@ -152,7 +212,7 @@ def process_mp_folder(mp_path):
             })
 
     # 4. Completed
-    comp_files = glob.glob(os.path.join(mp_path, 'Completed*.csv'))
+    comp_files = glob.glob(os.path.join(mp_path, '*[Cc]ompleted*.csv'))
     df_comp = pd.DataFrame()
     if comp_files:
         df_comp = pd.read_csv(comp_files[0], encoding='utf-8', encoding_errors='replace')
@@ -211,7 +271,7 @@ def main():
     all_masters = []
     
     # Get all MP folders
-    for mp_folder in os.listdir(RAW_DIR):
+    for mp_folder in sorted(os.listdir(RAW_DIR)):
         mp_path = os.path.join(RAW_DIR, mp_folder)
         if os.path.isdir(mp_path):
             mp_master = process_mp_folder(mp_path)
@@ -228,6 +288,11 @@ def main():
         out_path = os.path.join(PROCESSED_DIR, 'master_dataset.csv')
         final_master.to_csv(out_path, index=False)
         print(f"Master dataset created at {out_path} with {len(final_master)} rows.")
+        
+        # Print state distribution
+        if 'state' in final_master.columns:
+            print("\nState distribution:")
+            print(final_master['state'].value_counts().to_string())
     else:
         print("No data processed.")
 

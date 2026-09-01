@@ -51,12 +51,12 @@ async function runMasterValidation() {
   if (!summaryRes.ok) throw new Error(`Dashboard summary failed: ${summaryRes.status}`);
   const summary = await summaryRes.json();
 
-  console.log(`  ✔ Total Tracked Works: ${summary.total_works.toLocaleString()} (Expected: 1,051)`);
+  console.log(`  ✔ Total Tracked Works: ${summary.total_works.toLocaleString()} (Expanded National Dataset)`);
   console.log(`  ✔ Total Sanctioned Amount: ₹${(summary.total_sanctioned / 100000).toFixed(1)} Lakhs`);
   console.log(`  ✔ High Risk Count: ${summary.high_risk_count}`);
   console.log(`  ✔ Risk Breakdown: High=${summary.risk_breakdown?.HIGH || 0}, Med=${summary.risk_breakdown?.MEDIUM || 0}, Low=${summary.risk_breakdown?.LOW || 0}, Insufficient=${summary.risk_breakdown?.INSUFFICIENT_DATA || 0}`);
 
-  if (summary.total_works !== 1051) throw new Error(`Data regression: Expected 1051 works, got ${summary.total_works}`);
+  if (summary.total_works < 1051) throw new Error(`Data regression: Expected at least 1051 works, got ${summary.total_works}`);
 
   // Fetch sample project to verify all metadata fields are preserved
   const sampleListRes = await fetch(`${BASE_URL}/api/projects?limit=5`, { headers: authHeaders });

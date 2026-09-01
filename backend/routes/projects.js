@@ -201,13 +201,18 @@ router.get('/', authMiddleware, async (req, res) => {
   }
 });
 
-// GET /api/projects/:id - single project details by projectId (work_id)
+// GET /api/projects/:id - single project details by projectId (work_id) or internal id
 router.get('/:id', authMiddleware, async (req, res) => {
   try {
-    const projectId = decodeURIComponent(req.params.id);
+    const rawId = decodeURIComponent(req.params.id);
     
-    const project = await prisma.project.findUnique({
-      where: { projectId },
+    const project = await prisma.project.findFirst({
+      where: {
+        OR: [
+          { projectId: rawId },
+          { id: rawId }
+        ]
+      },
       include: {
         cases: {
           orderBy: { createdAt: 'desc' },
@@ -284,11 +289,16 @@ router.get('/:id', authMiddleware, async (req, res) => {
 // POST /api/projects/:id/investigate - quick inline investigation status update
 router.post('/:id/investigate', authMiddleware, async (req, res) => {
   try {
-    const projectId = decodeURIComponent(req.params.id);
+    const rawId = decodeURIComponent(req.params.id);
     const { status, notes } = req.body;
 
-    const project = await prisma.project.findUnique({
-      where: { projectId }
+    const project = await prisma.project.findFirst({
+      where: {
+        OR: [
+          { projectId: rawId },
+          { id: rawId }
+        ]
+      }
     });
 
     if (!project) {
@@ -490,6 +500,13 @@ export async function recalculateOverallProjectRisks(prismaInstance) {
     }
   }
 
+  const districtMap = new Map();
+  projects.forEach(p => {
+    const d = (p.district || 'UNKNOWN').toUpperCase();
+    if (!districtMap.has(d)) districtMap.set(d, []);
+    districtMap.get(d).push(p);
+  });
+
   let count = 0;
   for (const p of projects) {
     // Resolve contractor profile
@@ -499,8 +516,9 @@ export async function recalculateOverallProjectRisks(prismaInstance) {
       contractorProfile = contractorMap.get(norm) || null;
     }
 
-    // Run the 7-dimension aggregator
-    const result = aggregateRisk(p, projects, contractorProfile);
+    // Run the 7-dimension aggregator with district-scoped projects
+    const districtProjects = districtMap.get((p.district || 'UNKNOWN').toUpperCase()) || [p];
+    const result = aggregateRisk(p, districtProjects, contractorProfile);
 
     // Determine risk level string
     const overallLevel = result.overallLevel;

@@ -4,6 +4,7 @@ import { StateEmblem } from '../components/common/StateEmblem';
 import { UserCheck, KeyRound } from '../components/common/Icons';
 import { useAuth } from '../context/AuthContext';
 import { Role } from '../types';
+import api from '../services/api';
 
 export const Login: React.FC = () => {
   const [searchParams] = useSearchParams();
@@ -13,16 +14,9 @@ export const Login: React.FC = () => {
   const [password, setPassword] = useState('••••••••••••');
   const [captchaInput, setCaptchaInput] = useState('');
   const [selectedRole, setSelectedRole] = useState<Role>(initialRole);
-  const [selectedState, setSelectedState] = useState('Karnataka');
-  const [selectedDistrict, setSelectedDistrict] = useState('BENGALURU URBAN');
-  const [locations, setLocations] = useState<Record<string, string[]>>({
-    'Karnataka': ['BENGALURU URBAN', 'BENGALURU RURAL', 'CHITRADURGA', 'DHARWAD', 'HASSAN', 'MANDYA', 'SHIVAMOGGA', 'TUMAKURU', 'UTTARA KANNADA'],
-    'Uttar Pradesh': ['KHERI', 'UNNAO'],
-    'Bihar': ['MUNGER', 'NAWADA', 'PATNA', 'PURBI CHAMPARAN'],
-    'Kerala': ['ALAPPUZHA', 'IDUKKI', 'KANNUR', 'KASARAGOD', 'KOLLAM', 'KOTTAYAM', 'KOZHIKODE', 'MALAPPURAM', 'PALAKKAD', 'THIRUVANANTHAPURAM', 'THRISSUR', 'WAYANAD'],
-    'Maharashtra': ['NAGPUR'],
-    'Nagaland': ['DIMAPUR', 'KOHIMA', 'MOKOKCHUNG', 'MON', 'PEREN', 'PHEK', 'TUENSANG', 'WOKHA']
-  });
+  const [selectedState, setSelectedState] = useState('');
+  const [selectedDistrict, setSelectedDistrict] = useState('');
+  const [locations, setLocations] = useState<Record<string, string[]>>({});
   
   const [error, setError] = useState<string | null>(null);
   
@@ -30,16 +24,26 @@ export const Login: React.FC = () => {
   const navigate = useNavigate();
 
   React.useEffect(() => {
-    // Attempt fetching dynamic locations from backend
-    fetch('http://localhost:5000/api/auth/locations')
-      .then(res => res.json())
-      .then(data => {
+    // Fetch dynamic locations from authoritative backend API
+    api.get('/auth/locations')
+      .then(res => {
+        const data = res.data;
         if (data.stateDistricts && Object.keys(data.stateDistricts).length > 0) {
-          setLocations(data.stateDistricts);
+          const locs: Record<string, string[]> = data.stateDistricts;
+          setLocations(locs);
+          const states = Object.keys(locs).sort();
+          if (states.length > 0) {
+            const firstState = states[0];
+            setSelectedState(firstState);
+            const firstDistricts = locs[firstState] || [];
+            if (firstDistricts.length > 0) {
+              setSelectedDistrict(firstDistricts[0]);
+            }
+          }
         }
       })
-      .catch(() => {
-        // Use default fallback
+      .catch(err => {
+        console.warn('Could not load locations from API:', err);
       });
   }, []);
 
@@ -48,6 +52,8 @@ export const Login: React.FC = () => {
     const districts = locations[st] || [];
     if (districts.length > 0) {
       setSelectedDistrict(districts[0]);
+    } else {
+      setSelectedDistrict('');
     }
   };
 
@@ -58,8 +64,8 @@ export const Login: React.FC = () => {
       await login(
         username,
         selectedRole,
-        selectedRole === 'MINISTRY' || selectedRole === 'MINISTER' ? 'All India' : selectedState,
-        selectedRole === 'DISTRICT' ? selectedDistrict : 'All Districts'
+        selectedRole === 'MINISTRY' || selectedRole === 'MINISTER' ? 'All India' : (selectedState || 'All India'),
+        selectedRole === 'DISTRICT' ? (selectedDistrict || 'All Districts') : 'All Districts'
       );
       navigate('/app');
     } catch (err: any) {
@@ -67,14 +73,18 @@ export const Login: React.FC = () => {
     }
   };
 
-  const handleDemoMode = async (demoRole: Role, demoState = 'Karnataka', demoDistrict = 'BENGALURU URBAN') => {
+  const handleDemoMode = async (demoRole: Role, demoState?: string, demoDistrict?: string) => {
     setError(null);
+    const effectiveState = demoState || selectedState || 'Uttar Pradesh';
+    const distList = locations[effectiveState] || [];
+    const effectiveDistrict = demoDistrict || selectedDistrict || distList[0] || 'Varanasi';
+
     try {
       await login(
         `DEMO-${demoRole}-2026`,
         demoRole,
-        demoRole === 'MINISTRY' || demoRole === 'MINISTER' ? 'All India' : demoState,
-        demoRole === 'DISTRICT' ? demoDistrict : 'All Districts'
+        demoRole === 'MINISTRY' || demoRole === 'MINISTER' ? 'All India' : effectiveState,
+        demoRole === 'DISTRICT' ? effectiveDistrict : 'All Districts'
       );
       navigate('/app');
     } catch (err: any) {

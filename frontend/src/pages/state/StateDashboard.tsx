@@ -8,8 +8,8 @@ export const StateDashboard: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
 
-  // State Scoping: Defaults to user's assigned state or Karnataka
-  const assignedState = user?.state || 'Karnataka';
+  // State Scoping: Defaults to user's assigned state
+  const assignedState = user?.state || 'Uttar Pradesh';
   const [selectedDistrict, setSelectedDistrict] = useState('ALL');
 
   // Filter projects belonging strictly to THIS state

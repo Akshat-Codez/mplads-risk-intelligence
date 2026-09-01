@@ -33,7 +33,13 @@ export default function calculateGisRisk(project, allProjects) {
     let totalInDistrict = 0;
     let similarNearby = 0;
 
-    for (const p of allProjects) {
+    const minLat = latitude - 0.05;
+    const maxLat = latitude + 0.05;
+    const minLng = longitude - 0.05;
+    const maxLng = longitude + 0.05;
+
+    for (let i = 0; i < allProjects.length; i++) {
+      const p = allProjects[i];
       if (p.id === project.id) continue;
       
       if (p.district === district) {
@@ -42,6 +48,7 @@ export default function calculateGisRisk(project, allProjects) {
       }
 
       if (p.latitude && p.longitude) {
+        if (p.latitude < minLat || p.latitude > maxLat || p.longitude < minLng || p.longitude > maxLng) continue;
         const dist = haversine(latitude, longitude, p.latitude, p.longitude);
         
         if (dist < 1 && p.contractorId === contractorId) nearbySameContractor++;

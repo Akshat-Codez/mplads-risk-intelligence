@@ -218,7 +218,13 @@ export const ProjectDetail: React.FC = () => {
           </div>
           <div>
             <span className="text-slate-400 font-medium">Sanctioned Amount</span>
-            <p className="font-semibold text-slate-800">₹{(project.sanctioned_amount || 0).toLocaleString()}</p>
+            <p className="font-semibold text-slate-800">
+              {project.sanctioned_amount && project.sanctioned_amount > 0 
+                ? `₹${project.sanctioned_amount.toLocaleString()}` 
+                : project.recommended_amount && project.recommended_amount > 0 
+                ? `₹${project.recommended_amount.toLocaleString()} (Rec. — Pending Sanction)` 
+                : 'Not Available'}
+            </p>
           </div>
         </div>
       </div>

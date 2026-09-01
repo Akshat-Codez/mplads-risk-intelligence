@@ -6,6 +6,8 @@ import { useAuth } from '../context/AuthContext';
 import { Role } from '../types';
 import { MOCK_PROJECTS } from '../data/mockData';
 
+import api from '../services/api';
+
 export const Register: React.FC = () => {
   const [name, setName] = useState('');
   const [designation, setDesignation] = useState('Senior Administrative Officer');
@@ -17,24 +19,61 @@ export const Register: React.FC = () => {
   const [selectedRole, setSelectedRole] = useState<Role>('STATE');
   const [house, setHouse] = useState('Lok Sabha');
   
-  const [state, setState] = useState('Karnataka');
-  const [district, setDistrict] = useState('BENGALURU URBAN');
+  const [state, setState] = useState('');
+  const [district, setDistrict] = useState('');
+  const [locations, setLocations] = useState<Record<string, string[]>>({});
 
   const { register } = useAuth();
   const navigate = useNavigate();
 
-  // Extract unique States dynamically
-  const uniqueStates = useMemo(() => {
-    const states = Array.from(new Set(MOCK_PROJECTS.map(p => p.state).filter(Boolean))).sort();
-    return states;
+  React.useEffect(() => {
+    api.get('/auth/locations')
+      .then(res => {
+        const data = res.data;
+        if (data.stateDistricts && Object.keys(data.stateDistricts).length > 0) {
+          setLocations(data.stateDistricts);
+          const states = Object.keys(data.stateDistricts).sort();
+          if (states.length > 0) {
+            setState(states[0]);
+            const dists = data.stateDistricts[states[0]] || [];
+            if (dists.length > 0) {
+              setDistrict(dists[0]);
+            }
+          }
+        }
+      })
+      .catch(err => {
+        console.warn('Could not load locations in Register:', err);
+      });
   }, []);
 
-  // Extract unique Districts based on selected State
+  const uniqueStates = useMemo(() => {
+    if (Object.keys(locations).length > 0) {
+      return Object.keys(locations).sort();
+    }
+    return Array.from(new Set(MOCK_PROJECTS.map(p => p.state).filter(Boolean))).sort();
+  }, [locations]);
+
   const uniqueDistricts = useMemo(() => {
+    if (locations[state] && locations[state].length > 0) {
+      return locations[state];
+    }
     const filtered = MOCK_PROJECTS.filter(p => p.state === state);
     const dists = Array.from(new Set(filtered.map(p => p.district).filter(Boolean))).sort();
-    return dists.length > 0 ? dists : ['BENGALURU URBAN', 'PATNA', 'PURBI CHAMPARAN', 'KHERI', 'UNNAO'];
-  }, [state]);
+    return dists;
+  }, [state, locations]);
+
+  const handleStateChange = (st: string) => {
+    setState(st);
+    const dists = locations[st] || [];
+    if (dists.length > 0) {
+      setDistrict(dists[0]);
+    } else {
+      const filtered = MOCK_PROJECTS.filter(p => p.state === st);
+      const fallbackDists = Array.from(new Set(filtered.map(p => p.district).filter(Boolean))).sort();
+      setDistrict(fallbackDists[0] || '');
+    }
+  };
 
   const handleRegister = (e: React.FormEvent) => {
     e.preventDefault();
@@ -170,9 +209,7 @@ export const Register: React.FC = () => {
                   <label className="block font-bold text-slate-800 mb-1">Select State Jurisdiction *</label>
                   <select
                     value={state}
-                    onChange={(e) => {
-                      setState(e.target.value);
-                    }}
+                    onChange={(e) => handleStateChange(e.target.value)}
                     className="w-full bg-white border border-slate-300 rounded-lg p-2.5 font-bold text-slate-900 focus:ring-2 focus:ring-blue-600"
                     required
                   >

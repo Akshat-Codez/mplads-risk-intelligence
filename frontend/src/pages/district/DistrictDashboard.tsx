@@ -8,19 +8,19 @@ export const DistrictDashboard: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
 
-  // District Scoping: Defaults to user's district or BENGALURU URBAN
-  const assignedDistrict = user?.district || 'BENGALURU URBAN';
-  const assignedState = user?.state || 'Karnataka';
+  // District Scoping: Defaults to user's district
+  const assignedDistrict = user?.district || 'KHERI';
+  const assignedState = user?.state || 'Uttar Pradesh';
 
   // Strictly filter projects belonging to THIS district ONLY and sort by risk score descending
   const districtProjects = useMemo(() => {
     return MOCK_PROJECTS
       .filter(p => 
-        p.district.toUpperCase().includes(assignedDistrict.toUpperCase()) || 
-        assignedDistrict.toUpperCase().includes(p.district.toUpperCase())
+        (p.district && assignedDistrict && p.district.toUpperCase() === assignedDistrict.toUpperCase()) &&
+        (!assignedState || p.state.toUpperCase() === assignedState.toUpperCase())
       )
       .sort((a, b) => b.riskScore - a.riskScore);
-  }, [assignedDistrict]);
+  }, [assignedDistrict, assignedState]);
 
   const totalWorks = districtProjects.length;
   const sanctionedCr = (districtProjects.reduce((acc, p) => acc + (p.sanctionedAmount || 0), 0) / 10000000).toFixed(2);
@@ -93,7 +93,7 @@ export const DistrictDashboard: React.FC = () => {
             <p className="text-xs text-slate-500">Compares official registered worksite coordinates against uploaded field photo EXIF GPS metadata in {assignedDistrict}.</p>
           </div>
           {selectedGeoProject && (
-            <button onClick={() => navigate(`/app/projects/${selectedGeoProject.id}`)} className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs px-4 py-2 rounded-lg transition shadow cursor-pointer">
+            <button onClick={() => navigate(`/app/projects/${encodeURIComponent(selectedGeoProject.projectId || selectedGeoProject.id)}`)} className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs px-4 py-2 rounded-lg transition shadow cursor-pointer">
               Inspect Local Evidence
             </button>
           )}
@@ -163,38 +163,48 @@ export const DistrictDashboard: React.FC = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 font-medium">
-              {districtProjects.map(p => (
-                <tr key={p.id} className="hover:bg-slate-50">
-                  <td className="p-3 max-w-sm">
-                    <p className="font-bold text-slate-900 leading-snug">{p.workTitle}</p>
-                    <p className="text-[10px] text-slate-400 font-mono">{p.projectId}</p>
-                  </td>
-                  <td className="p-3 font-bold text-slate-900">₹{(p.sanctionedAmount / 100000).toFixed(1)} L</td>
-                  <td className="p-3 text-slate-700">{p.vendorName}</td>
-                  <td className="p-3">
-                    <span className="bg-slate-100 text-slate-700 px-2 py-0.5 rounded text-[10px] font-bold border border-slate-200">
-                      {p.status}
-                    </span>
-                  </td>
-                  <td className="p-3">
-                    <span className={`px-2 py-0.5 rounded font-black text-[10px] ${
-                      p.riskLevel === 'CRITICAL' || p.riskLevel === 'HIGH' || p.riskScore >= 50 ? 'bg-red-100 text-red-800 border border-red-200' :
-                      p.riskLevel === 'MEDIUM' || p.riskScore >= 25 ? 'bg-amber-100 text-amber-800 border border-amber-200' :
-                      'bg-emerald-100 text-emerald-800 border border-emerald-200'
-                    }`}>
-                      {p.riskScore}/100 ({p.riskLevel})
-                    </span>
-                  </td>
-                  <td className="p-3">
-                    <button 
-                      onClick={() => navigate(`/app/projects/${p.id}`)}
-                      className="bg-blue-600 text-white font-bold px-3 py-1 rounded text-[11px] hover:bg-blue-700 cursor-pointer"
-                    >
-                      Audit
-                    </button>
-                  </td>
-                </tr>
-              ))}
+              {districtProjects.map(p => {
+                const targetId = p.projectId || p.id;
+                return (
+                  <tr key={p.id || p.projectId} className="hover:bg-slate-50">
+                    <td className="p-3 max-w-sm">
+                      <p className="font-bold text-slate-900 leading-snug">{p.workTitle}</p>
+                      <p className="text-[10px] text-slate-400 font-mono">{p.projectId}</p>
+                    </td>
+                    <td className="p-3 font-bold text-slate-900">
+                      {p.sanctionedAmount && p.sanctionedAmount > 0 
+                        ? `₹${(p.sanctionedAmount / 100000).toFixed(1)} L` 
+                        : p.recommendedAmount && p.recommendedAmount > 0 
+                        ? `₹${(p.recommendedAmount / 100000).toFixed(1)} L (Rec.)` 
+                        : 'Pending Sanction'}
+                    </td>
+                    <td className="p-3 text-slate-700">{p.vendorName}</td>
+                    <td className="p-3">
+                      <span className="bg-slate-100 text-slate-700 px-2 py-0.5 rounded text-[10px] font-bold border border-slate-200">
+                        {p.status || 'Not Inspected'}
+                      </span>
+                    </td>
+                    <td className="p-3">
+                      <span className={`px-2 py-0.5 rounded font-black text-[10px] ${
+                        p.riskLevel === 'CRITICAL' || p.riskLevel === 'HIGH' || p.riskScore >= 50 ? 'bg-red-100 text-red-800 border border-red-200' :
+                        p.riskLevel === 'MEDIUM' || p.riskScore >= 25 ? 'bg-amber-100 text-amber-800 border border-amber-200' :
+                        p.riskLevel === 'INSUFFICIENT DATA' ? 'bg-slate-100 text-slate-700 border border-slate-300' :
+                        'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                      }`}>
+                        {p.riskLevel === 'INSUFFICIENT DATA' ? 'INSUFFICIENT DATA' : `${p.riskScore}/100 (${p.riskLevel})`}
+                      </span>
+                    </td>
+                    <td className="p-3">
+                      <button 
+                        onClick={() => navigate(`/app/projects/${encodeURIComponent(targetId)}`)}
+                        className="bg-blue-600 text-white font-bold px-3 py-1 rounded text-[11px] hover:bg-blue-700 cursor-pointer"
+                      >
+                        Audit
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

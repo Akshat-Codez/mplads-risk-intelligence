@@ -29,12 +29,12 @@ export const Navbar: React.FC = () => {
       return (
         <button
           onClick={() => setShowScopeModal(!showScopeModal)}
-          className="flex items-center space-x-1.5 bg-purple-50 hover:bg-purple-100 text-purple-900 border border-purple-300 px-3 py-1.5 rounded-full text-xs font-bold transition shadow-sm"
+          className="flex items-center space-x-1.5 bg-purple-50 hover:bg-purple-100 text-purple-900 border border-purple-300 px-3 py-1.5 rounded-full text-xs font-bold transition shadow-sm cursor-pointer"
           title="Click to switch authority jurisdiction scope"
         >
           <span>📍</span>
           <span>DISTRICT:</span>
-          <span className="font-extrabold text-purple-950 underline">{user?.district || 'BENGALURU URBAN'}, {user?.state || 'Karnataka'}</span>
+          <span className="font-extrabold text-purple-950 underline">{user?.district || 'Assigned District'}, {user?.state || 'Assigned State'}</span>
         </button>
       );
     }
@@ -42,24 +42,24 @@ export const Navbar: React.FC = () => {
       return (
         <button
           onClick={() => setShowScopeModal(!showScopeModal)}
-          className="flex items-center space-x-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border border-emerald-300 px-3 py-1.5 rounded-full text-xs font-bold transition shadow-sm"
+          className="flex items-center space-x-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border border-emerald-300 px-3 py-1.5 rounded-full text-xs font-bold transition shadow-sm cursor-pointer"
           title="Click to switch authority jurisdiction scope"
         >
           <span>🏢</span>
           <span>STATE:</span>
-          <span className="font-extrabold text-emerald-950 underline">{user?.state || 'Karnataka'}</span>
+          <span className="font-extrabold text-emerald-950 underline">{user?.state || 'Assigned State'}</span>
         </button>
       );
     }
     return (
       <button
         onClick={() => setShowScopeModal(!showScopeModal)}
-        className="flex items-center space-x-1.5 bg-blue-50 hover:bg-blue-100 text-blue-900 border border-blue-300 px-3 py-1.5 rounded-full text-xs font-bold transition shadow-sm"
+        className="flex items-center space-x-1.5 bg-blue-50 hover:bg-blue-100 text-blue-900 border border-blue-300 px-3 py-1.5 rounded-full text-xs font-bold transition shadow-sm cursor-pointer"
         title="Click to switch authority jurisdiction scope"
       >
         <span>🏛️</span>
         <span>SCOPE:</span>
-        <span className="font-extrabold text-blue-950 underline">National (All India — 1,051 Works)</span>
+        <span className="font-extrabold text-blue-950 underline">National (All India)</span>
       </button>
     );
   };
@@ -92,29 +92,22 @@ export const Navbar: React.FC = () => {
                 onClick={() => handleScopeChange('MINISTRY', 'All India', 'All Districts')}
                 className={`w-full text-left p-2 rounded font-bold flex items-center justify-between ${role === 'MINISTRY' ? 'bg-blue-100 text-blue-900' : 'hover:bg-slate-100 text-slate-700'}`}
               >
-                <span>🏛️ National (All India)</span>
-                <span className="text-[10px] text-slate-500">1,051 Works</span>
+                <span>🏛️ National Jurisdiction</span>
+                <span className="text-[10px] text-slate-500">All India</span>
               </button>
               <button
-                onClick={() => handleScopeChange('STATE', 'Karnataka', 'All Districts')}
-                className={`w-full text-left p-2 rounded font-bold flex items-center justify-between ${role === 'STATE' && user?.state === 'Karnataka' ? 'bg-emerald-100 text-emerald-900' : 'hover:bg-slate-100 text-slate-700'}`}
+                onClick={() => handleScopeChange('STATE', user?.state || 'Uttar Pradesh', 'All Districts')}
+                className={`w-full text-left p-2 rounded font-bold flex items-center justify-between ${role === 'STATE' ? 'bg-emerald-100 text-emerald-900' : 'hover:bg-slate-100 text-slate-700'}`}
               >
-                <span>🏢 State: Karnataka</span>
-                <span className="text-[10px] text-slate-500">120 Works</span>
+                <span>🏢 State Jurisdiction</span>
+                <span className="text-[10px] text-slate-500">{user?.state || 'Uttar Pradesh'}</span>
               </button>
               <button
-                onClick={() => handleScopeChange('DISTRICT', 'Karnataka', 'BENGALURU URBAN')}
-                className={`w-full text-left p-2 rounded font-bold flex items-center justify-between ${role === 'DISTRICT' && user?.district === 'BENGALURU URBAN' ? 'bg-purple-100 text-purple-900' : 'hover:bg-slate-100 text-slate-700'}`}
+                onClick={() => handleScopeChange('DISTRICT', user?.state || 'Uttar Pradesh', user?.district || 'KHERI')}
+                className={`w-full text-left p-2 rounded font-bold flex items-center justify-between ${role === 'DISTRICT' ? 'bg-purple-100 text-purple-900' : 'hover:bg-slate-100 text-slate-700'}`}
               >
-                <span>📍 District: Bengaluru Urban</span>
-                <span className="text-[10px] text-purple-700 font-extrabold">99 Works</span>
-              </button>
-              <button
-                onClick={() => handleScopeChange('STATE', 'Uttar Pradesh', 'All Districts')}
-                className={`w-full text-left p-2 rounded font-bold flex items-center justify-between ${role === 'STATE' && user?.state === 'Uttar Pradesh' ? 'bg-amber-100 text-amber-900' : 'hover:bg-slate-100 text-slate-700'}`}
-              >
-                <span>🏢 State: Uttar Pradesh</span>
-                <span className="text-[10px] text-slate-500">429 Works</span>
+                <span>📍 District Jurisdiction</span>
+                <span className="text-[10px] text-purple-700 font-extrabold">{user?.district || 'KHERI'}</span>
               </button>
             </div>
           </div>

@@ -9,8 +9,8 @@ export const Projects: React.FC = () => {
   const { user, role } = useAuth();
 
   // Role-Enforced Scoping Initial State
-  const defaultState = (role === 'STATE' || role === 'DISTRICT') ? (user?.state || 'Karnataka') : 'ALL';
-  const defaultDistrict = role === 'DISTRICT' ? (user?.district || 'BENGALURU URBAN') : 'ALL';
+  const defaultState = (role === 'STATE' || role === 'DISTRICT') ? (user?.state || 'ALL') : 'ALL';
+  const defaultDistrict = role === 'DISTRICT' ? (user?.district || 'ALL') : 'ALL';
 
   // Filter States
   const [searchTerm, setSearchTerm] = useState('');
@@ -25,10 +25,10 @@ export const Projects: React.FC = () => {
 
   useEffect(() => {
     if (role === 'STATE' || role === 'DISTRICT') {
-      setSelectedState(user?.state || 'Karnataka');
+      setSelectedState(user?.state || 'ALL');
     }
     if (role === 'DISTRICT') {
-      setSelectedDistrict(user?.district || 'BENGALURU URBAN');
+      setSelectedDistrict(user?.district || 'ALL');
     }
   }, [role, user]);
 
@@ -45,8 +45,8 @@ export const Projects: React.FC = () => {
 
   // Extract unique Districts based on selected State
   const uniqueDistricts = useMemo(() => {
-    const targetState = selectedState === 'ALL' ? (user?.state || 'Karnataka') : selectedState;
-    const filtered = MOCK_PROJECTS.filter(p => p.state === targetState);
+    const targetState = selectedState === 'ALL' ? (user?.state || '') : selectedState;
+    const filtered = targetState ? MOCK_PROJECTS.filter(p => p.state === targetState) : MOCK_PROJECTS;
     const dists = Array.from(new Set(filtered.map(p => p.district).filter(Boolean))).sort();
     return ['ALL', ...dists];
   }, [selectedState, user]);
@@ -246,6 +246,7 @@ export const Projects: React.FC = () => {
               <option value="HIGH">🟠 High Risk (50-79)</option>
               <option value="MEDIUM">🟡 Moderate Risk (25-49)</option>
               <option value="LOW">🟢 Low Risk (0-24)</option>
+              <option value="INSUFFICIENT DATA">⚪ Insufficient Data (&lt;40% Confidence)</option>
             </select>
           </div>
         </div>
@@ -278,47 +279,61 @@ export const Projects: React.FC = () => {
                 </td>
               </tr>
             ) : (
-              paginatedProjects.map((p) => (
-                <tr 
-                  key={p.id} 
-                  onClick={() => navigate(`/app/projects/${p.id}`)}
-                  className="hover:bg-slate-50 cursor-pointer transition"
-                >
-                  <td className="p-3.5">
-                    <span className={`px-2.5 py-1 rounded-full font-black text-[10px] inline-block ${
-                      p.riskLevel === 'CRITICAL' || p.riskLevel === 'HIGH' || p.riskScore >= 50 ? 'bg-red-100 text-red-800 border border-red-300' : 
-                      p.riskLevel === 'MEDIUM' || p.riskScore >= 25 ? 'bg-amber-100 text-amber-800 border border-amber-300' : 
-                      'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                    }`}>
-                      {p.riskScore}/100 ({p.riskLevel})
-                    </span>
-                  </td>
-                  <td className="p-3.5 max-w-sm">
-                    <p className="font-bold text-slate-900 leading-snug">{p.workTitle}</p>
-                    <p className="text-[10px] text-slate-500 font-mono mt-0.5">{p.projectId}</p>
-                  </td>
-                  <td className="p-3.5">
-                    <p className="font-bold text-slate-800">{p.state}</p>
-                    <p className="text-[10px] text-slate-500 uppercase">{p.district}</p>
-                  </td>
-                  <td className="p-3.5 font-extrabold text-slate-900">₹{(p.sanctionedAmount / 100000).toFixed(1)} L</td>
-                  <td className="p-3.5 font-extrabold text-red-600">₹{(p.actualExpenditure / 100000).toFixed(1)} L</td>
-                  <td className="p-3.5 text-slate-800 font-semibold">{p.vendorName}</td>
-                  <td className="p-3.5">
-                    <span className="bg-slate-100 text-slate-700 px-2.5 py-1 rounded text-[10px] font-bold border border-slate-200 whitespace-nowrap">
-                      {p.status}
-                    </span>
-                  </td>
-                  <td className="p-3.5">
-                    <button 
-                      onClick={(e) => { e.stopPropagation(); navigate(`/app/projects/${p.id}`); }}
-                      className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-[11px] px-3 py-1.5 rounded shadow transition cursor-pointer whitespace-nowrap"
-                    >
-                      View Audit
-                    </button>
-                  </td>
-                </tr>
-              ))
+              paginatedProjects.map((p) => {
+                const targetId = p.projectId || p.id;
+                return (
+                  <tr 
+                    key={p.id || p.projectId} 
+                    onClick={() => navigate(`/app/projects/${encodeURIComponent(targetId)}`)}
+                    className="hover:bg-slate-50 cursor-pointer transition"
+                  >
+                    <td className="p-3.5">
+                      <span className={`px-2.5 py-1 rounded-full font-black text-[10px] inline-block ${
+                        p.riskLevel === 'CRITICAL' || p.riskLevel === 'HIGH' || p.riskScore >= 50 ? 'bg-red-100 text-red-800 border border-red-300' : 
+                        p.riskLevel === 'MEDIUM' || p.riskScore >= 25 ? 'bg-amber-100 text-amber-800 border border-amber-300' : 
+                        p.riskLevel === 'INSUFFICIENT DATA' ? 'bg-slate-100 text-slate-700 border border-slate-300' :
+                        'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                      }`}>
+                        {p.riskLevel === 'INSUFFICIENT DATA' ? 'INSUFFICIENT DATA' : `${p.riskScore}/100 (${p.riskLevel})`}
+                      </span>
+                    </td>
+                    <td className="p-3.5 max-w-sm">
+                      <p className="font-bold text-slate-900 leading-snug">{p.workTitle}</p>
+                      <p className="text-[10px] text-slate-500 font-mono mt-0.5">{p.projectId}</p>
+                    </td>
+                    <td className="p-3.5">
+                      <p className="font-bold text-slate-800">{p.state}</p>
+                      <p className="text-[10px] text-slate-500 uppercase">{p.district}</p>
+                    </td>
+                    <td className="p-3.5 font-extrabold text-slate-900">
+                      {p.sanctionedAmount && p.sanctionedAmount > 0 
+                        ? `₹${(p.sanctionedAmount / 100000).toFixed(1)} L` 
+                        : p.recommendedAmount && p.recommendedAmount > 0 
+                        ? `₹${(p.recommendedAmount / 100000).toFixed(1)} L (Rec.)` 
+                        : 'Not Sanctioned'}
+                    </td>
+                    <td className="p-3.5 font-extrabold text-red-600">
+                      {p.actualExpenditure && p.actualExpenditure > 0 
+                        ? `₹${(p.actualExpenditure / 100000).toFixed(1)} L` 
+                        : (p.sanctionedAmount ? '₹0.0 L (Unspent)' : 'Not Disbursed')}
+                    </td>
+                    <td className="p-3.5 text-slate-800 font-semibold">{p.vendorName}</td>
+                    <td className="p-3.5">
+                      <span className="bg-slate-100 text-slate-700 px-2.5 py-1 rounded text-[10px] font-bold border border-slate-200 whitespace-nowrap">
+                        {p.status || 'Not Inspected'}
+                      </span>
+                    </td>
+                    <td className="p-3.5">
+                      <button 
+                        onClick={(e) => { e.stopPropagation(); navigate(`/app/projects/${encodeURIComponent(targetId)}`); }}
+                        className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-[11px] px-3 py-1.5 rounded shadow transition cursor-pointer whitespace-nowrap"
+                      >
+                        View Audit
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })
             )}
           </tbody>
         </table>

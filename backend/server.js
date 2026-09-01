@@ -121,13 +121,15 @@ app.get('/api/auth/locations', async (req, res) => {
 
     const stateDistricts = {};
     for (const r of records) {
-      if (!r.state || !r.state.trim()) continue;
-      const st = r.state.trim();
-      const dt = r.district ? r.district.trim() : null;
+      if (!r.state) continue;
+      const st = r.state.replace(/\xa0/g, '').trim();
+      if (!st || st === 'UNKNOWN') continue;
+
+      const dt = r.district ? r.district.replace(/\xa0/g, '').trim() : null;
       if (!stateDistricts[st]) {
         stateDistricts[st] = [];
       }
-      if (dt && !stateDistricts[st].includes(dt)) {
+      if (dt && dt !== 'UNKNOWN' && !stateDistricts[st].includes(dt)) {
         stateDistricts[st].push(dt);
       }
     }
@@ -136,8 +138,10 @@ app.get('/api/auth/locations', async (req, res) => {
       stateDistricts[st].sort();
     }
 
+    const validStates = Object.keys(stateDistricts).sort();
+
     res.json({
-      states: Object.keys(stateDistricts).sort(),
+      states: validStates,
       stateDistricts
     });
   } catch (err) {

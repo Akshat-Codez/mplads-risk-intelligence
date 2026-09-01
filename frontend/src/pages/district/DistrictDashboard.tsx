@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Briefcase, AlertTriangle, CheckCircle2, MapPin, ArrowUpRight, ShieldAlert, FileText } from '../../components/common/Icons';
+import { Briefcase, AlertTriangle, CheckCircle2, MapPin, ArrowUpRight, ShieldAlert, FileText, Filter } from '../../components/common/Icons';
 import { MOCK_PROJECTS } from '../../data/mockData';
+import { useAuth } from '../../context/AuthContext';
 
 const BOQ_DISTRICT_CHECK = [
   { item: 'Community Hall Roofing Structural Steel Truss', quoted: 1450000, reference: 890000, deviation: '+62.9%', status: 'HIGH_PRICE' },
@@ -10,171 +11,191 @@ const BOQ_DISTRICT_CHECK = [
 
 export const DistrictDashboard: React.FC = () => {
   const navigate = useNavigate();
-  const [selectedGeoProject] = useState(MOCK_PROJECTS[0]);
+  const { user } = useAuth();
+
+  // District Scoping: Defaults to user's district or BENGALURU URBAN
+  const assignedDistrict = user?.district || 'BENGALURU URBAN';
+  const assignedState = user?.state || 'Karnataka';
+
+  // Strictly filter projects belonging to THIS district ONLY
+  const districtProjects = useMemo(() => {
+    return MOCK_PROJECTS.filter(p => 
+      p.district.toUpperCase().includes(assignedDistrict.toUpperCase()) || 
+      assignedDistrict.toUpperCase().includes(p.district.toUpperCase())
+    );
+  }, [assignedDistrict]);
+
+  const totalWorks = districtProjects.length;
+  const sanctionedCr = (districtProjects.reduce((acc, p) => acc + (p.sanctionedAmount || 0), 0) / 10000000).toFixed(2);
+  const localAnomalies = districtProjects.filter(p => p.riskScore >= 60 || p.riskLevel === 'HIGH' || p.riskLevel === 'CRITICAL');
+  const pendingReviews = districtProjects.filter(p => p.status.toLowerCase().includes('inspection') || p.status.toLowerCase().includes('pending'));
+
+  const selectedGeoProject = localAnomalies[0] || districtProjects[0] || MOCK_PROJECTS[0];
 
   return (
-    <div className="p-6 space-y-6 font-sans">
-      <div className="border-b border-slate-200 pb-4 flex justify-between items-center">
+    <div className="p-6 space-y-6 font-sans bg-slate-50 min-h-screen">
+      
+      {/* Header Banner */}
+      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">District Collector Action Hub (Varanasi District)</h1>
-          <p className="text-xs text-slate-500">Field inspection queues, local project evidence verifications, and investigation actions</p>
+          <div className="flex items-center space-x-2">
+            <span className="bg-purple-100 text-purple-800 border border-purple-200 text-xs px-3 py-0.5 rounded-full font-extrabold uppercase">
+              📍 Local Jurisdiction Scope • {assignedState} State
+            </span>
+          </div>
+          <h1 className="text-2xl font-black text-slate-900 font-serif mt-1">
+            District Collector Action Hub ({assignedDistrict})
+          </h1>
+          <p className="text-xs text-slate-500 mt-0.5 font-medium">
+            Field inspection queues, local project evidence verifications, and investigation actions scoped strictly to {assignedDistrict}.
+          </p>
         </div>
-        <span className="bg-red-100 text-red-700 border border-red-200 text-xs px-3 py-1 rounded-full font-bold">
-          1 Priority Action Pending
+        <span className="bg-red-100 text-red-700 border border-red-200 text-xs px-3.5 py-1.5 rounded-full font-bold">
+          {localAnomalies.length} Local Anomaly Priority Actions
         </span>
       </div>
 
-      {/* District KPI Cards */}
+      {/* Strictly Scoped District KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-          <p className="text-xs text-slate-500 font-medium">District Total Works</p>
-          <h3 className="text-2xl font-extrabold text-slate-900">412</h3>
+        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-1">
+          <p className="text-xs text-slate-500 font-bold uppercase">{assignedDistrict} Total Works</p>
+          <h3 className="text-3xl font-black text-slate-900 font-serif">{totalWorks}</h3>
+          <p className="text-[10px] text-slate-400 font-semibold">Strictly District Jurisdiction</p>
         </div>
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-          <p className="text-xs text-slate-500 font-medium">Sanctioned Amount</p>
-          <h3 className="text-2xl font-extrabold text-slate-900">₹28.5 Cr</h3>
+
+        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-1">
+          <p className="text-xs text-slate-500 font-bold uppercase">Sanctioned Budget</p>
+          <h3 className="text-3xl font-black text-blue-600 font-serif">₹{sanctionedCr} Cr</h3>
+          <p className="text-[10px] text-blue-600 font-bold">Total Allocation Disbursed</p>
         </div>
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-          <p className="text-xs text-slate-500 font-medium">Local Anomalies</p>
-          <h3 className="text-2xl font-extrabold text-red-600">4 Works</h3>
+
+        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-1">
+          <p className="text-xs text-slate-500 font-bold uppercase">Local Anomalies Flagged</p>
+          <h3 className="text-3xl font-black text-red-600 font-serif">{localAnomalies.length} Works</h3>
+          <p className="text-[10px] text-red-500 font-bold">Risk Score ≥ 60/100</p>
         </div>
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-          <p className="text-xs text-slate-500 font-medium">Pending Evidence Review</p>
-          <h3 className="text-2xl font-extrabold text-amber-600">2 Items</h3>
+
+        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-1">
+          <p className="text-xs text-slate-500 font-bold uppercase">Pending Field Inspections</p>
+          <h3 className="text-3xl font-black text-amber-600 font-serif">{pendingReviews.length} Works</h3>
+          <p className="text-[10px] text-amber-600 font-bold">Awaiting Inspector Sign-off</p>
         </div>
       </div>
 
-      {/* FEATURE 1: Interactive GIS Geofence Inspector */}
-      <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-4 border-l-4 border-l-red-600">
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-2 border-b border-slate-200 pb-3">
+      {/* FEATURE 1: Interactive GIS Geofence Inspector (Local Scope) */}
+      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4 border-l-4 border-l-red-600">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-2 border-b border-slate-100 pb-3">
           <div>
             <div className="flex items-center space-x-2">
-              <span className="bg-red-100 text-red-700 text-[10px] font-extrabold px-2.5 py-0.5 rounded-full uppercase">
-                FEATURE 1: GIS Geofence Location Inspector
+              <span className="bg-red-100 text-red-800 text-[10px] font-extrabold px-2.5 py-0.5 rounded-full uppercase">
+                FEATURE 1: GIS Geofence Inspector
               </span>
               <span className="text-xs text-slate-500 font-semibold">100m Tolerance Boundary Check</span>
             </div>
-            <h3 className="text-base font-bold text-slate-900 mt-1">Geotag Photo Location Mismatch Visualizer</h3>
-            <p className="text-xs text-slate-500">Compares official registered worksite coordinates against uploaded field photo EXIF GPS metadata.</p>
+            <h3 className="text-base font-bold text-slate-900 font-serif mt-1">Geotag Photo Location Mismatch Visualizer</h3>
+            <p className="text-xs text-slate-500">Compares official registered worksite coordinates against uploaded field photo EXIF GPS metadata in {assignedDistrict}.</p>
           </div>
-          <button onClick={() => navigate(`/projects/${selectedGeoProject.id}`)} className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs px-3.5 py-1.5 rounded transition">
-            Open Full Audit
-          </button>
-        </div>
-
-        {/* GIS Simulator Container */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {/* Left Map Simulation Visual */}
-          <div className="md:col-span-2 bg-slate-900 rounded-xl p-5 text-white h-64 relative overflow-hidden border border-slate-800 flex flex-col justify-between">
-            <div className="flex justify-between items-center text-xs">
-              <span className="bg-slate-800/80 px-3 py-1 rounded text-slate-200 font-mono">
-                🟢 Registered Worksite: ({selectedGeoProject.regLatitude}, {selectedGeoProject.regLongitude})
-              </span>
-              <span className="bg-red-500/20 text-red-400 px-3 py-1 rounded border border-red-500/40 font-bold">
-                8.4 km Distance Mismatch
-              </span>
-            </div>
-
-            {/* Visual SVG Map Circle Simulator */}
-            <div className="flex items-center justify-center my-auto relative">
-              <svg className="w-full h-32" viewBox="0 0 400 120">
-                {/* 100m Tolerance Green Circle */}
-                <circle cx="100" cy="60" r="35" fill="rgba(16, 185, 129, 0.15)" stroke="#10b981" strokeWidth="2" strokeDasharray="4"/>
-                <circle cx="100" cy="60" r="6" fill="#10b981"/>
-                <text x="100" y="110" fill="#10b981" fontSize="9" textAnchor="middle" fontWeight="bold">Registered Worksite (100m Geofence)</text>
-
-                {/* Dotted Line Gap */}
-                <line x1="100" y1="60" x2="300" y2="60" stroke="#ef4444" strokeWidth="2" strokeDasharray="6"/>
-
-                {/* Photo EXIF Mismatch Location */}
-                <circle cx="300" cy="60" r="8" fill="#ef4444" className="animate-ping"/>
-                <circle cx="300" cy="60" r="8" fill="#ef4444"/>
-                <text x="300" y="110" fill="#ef4444" fontSize="9" textAnchor="middle" fontWeight="bold">Photo EXIF Location (8.4 km Away)</text>
-              </svg>
-            </div>
-          </div>
-
-          {/* Right Audit Summary */}
-          <div className="space-y-3 text-xs bg-slate-50 p-4 rounded-xl border border-slate-200">
-            <h4 className="font-bold text-slate-900 text-sm">Location Audit Decision:</h4>
-            <p className="text-slate-600">
-              Photo uploaded for <strong>{selectedGeoProject.workTitle}</strong> was captured outside the allowed 100m geofence radius.
-            </p>
-            <div className="bg-red-50 p-2.5 rounded border border-red-200 text-red-700 font-bold">
-              ⚠ Action Required: Request field verification from District Inspector before releasing payment.
-            </div>
-            <button 
-              onClick={() => alert(`Verification order issued for ${selectedGeoProject.projectId}. Payment disbursal paused.`)}
-              className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-2 rounded transition"
-            >
-              Issue Field Audit Order
+          {selectedGeoProject && (
+            <button onClick={() => navigate(`/app/projects/${selectedGeoProject.id}`)} className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs px-4 py-2 rounded-lg transition shadow cursor-pointer">
+              Inspect Local Evidence
             </button>
-          </div>
-        </div>
-      </div>
-
-      {/* FEATURE 3: District Local BOQ Procurement Rate Auditor */}
-      <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-4 border-l-4 border-l-blue-600">
-        <div className="flex justify-between items-center border-b pb-3">
-          <div>
-            <div className="flex items-center space-x-2">
-              <span className="bg-blue-100 text-blue-800 text-[10px] font-extrabold px-2.5 py-0.5 rounded-full uppercase">
-                FEATURE 3: Local BOQ Rate Audit
-              </span>
-              <span className="text-xs text-slate-500 font-semibold">Tender BOQ Price vs CPWD SSR Benchmark</span>
-            </div>
-            <h3 className="text-base font-bold text-slate-900 mt-1">District Tender Item Rate Auditor</h3>
-            <p className="text-xs text-slate-500">Flags quoted item prices exceeding standard schedule of rates before sanction approval.</p>
-          </div>
+          )}
         </div>
 
-        <div className="space-y-3 text-xs">
-          {BOQ_DISTRICT_CHECK.map(check => (
-            <div key={check.item} className="p-3 bg-slate-50 rounded-lg border border-slate-200 flex flex-col md:flex-row justify-between items-start md:items-center gap-2">
-              <div>
-                <p className="font-bold text-slate-900">{check.item}</p>
-                <p className="text-[11px] text-slate-500">Quoted: ₹{check.quoted.toLocaleString('en-IN')} | SSR Benchmark: ₹{check.reference.toLocaleString('en-IN')}</p>
+        {selectedGeoProject && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-slate-50 p-5 rounded-xl border border-slate-200 text-xs">
+            <div className="space-y-3">
+              <div className="space-y-1">
+                <span className="text-[10px] font-extrabold text-red-600 uppercase tracking-widest">Local High Risk Flagged Work</span>
+                <h4 className="font-bold text-slate-900 text-sm">{selectedGeoProject.workTitle}</h4>
+                <p className="text-slate-500 font-mono text-[10px]">ID: {selectedGeoProject.projectId} • {selectedGeoProject.district}</p>
               </div>
-              <span className="bg-red-100 text-red-700 font-extrabold px-3 py-1 rounded border border-red-200">
-                {check.deviation} Inflation
-              </span>
+
+              <div className="grid grid-cols-2 gap-2 font-mono text-[11px] pt-1">
+                <div className="bg-emerald-50 p-2.5 rounded-lg border border-emerald-200">
+                  <span className="font-bold text-emerald-800 text-[10px] block">REGISTERED WORKSITE GPS</span>
+                  <span className="text-slate-800 font-bold">12.9716° N, 77.5946° E</span>
+                  <span className="text-[9px] text-emerald-600 block mt-0.5 font-sans font-semibold">100m Approved Geofence Radius</span>
+                </div>
+                <div className="bg-red-50 p-2.5 rounded-lg border border-red-200">
+                  <span className="font-bold text-red-800 text-[10px] block">UPLOADED PHOTO EXIF GPS</span>
+                  <span className="text-slate-800 font-bold">13.0472° N, 77.6210° E</span>
+                  <span className="text-[9px] text-red-600 block mt-0.5 font-sans font-bold">⚠️ 8.4 km Geofence Mismatch</span>
+                </div>
+              </div>
             </div>
-          ))}
+
+            <div className="relative bg-slate-900 rounded-xl overflow-hidden min-h-[160px] flex items-center justify-center p-4 border border-slate-800 text-white">
+              <div className="text-center space-y-2">
+                <div className="w-10 h-10 rounded-full bg-red-600/30 border border-red-500 flex items-center justify-center mx-auto text-red-400">
+                  <MapPin size={20} />
+                </div>
+                <span className="font-mono text-xs text-amber-300 font-bold block">DISCREPANCY DETECTED: 8.4 km OUTSIDE GEOFENCE</span>
+                <p className="text-[10px] text-slate-300">Photo taken in secondary layout away from sanctioned site location.</p>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Local District Works Table */}
+      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+        <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+          <h3 className="font-extrabold text-base text-slate-900 font-serif">Local Works Inspection Queue ({districtProjects.length})</h3>
+          <span className="text-xs font-bold text-purple-700 bg-purple-50 border border-purple-200 px-3 py-1 rounded-full">
+            District: {assignedDistrict}
+          </span>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs">
+            <thead>
+              <tr className="bg-slate-50 text-slate-500 uppercase font-bold border-b border-slate-200">
+                <th className="p-3">WORK ID & TITLE</th>
+                <th className="p-3">SANCTIONED AMOUNT</th>
+                <th className="p-3">VENDOR</th>
+                <th className="p-3">STATUS</th>
+                <th className="p-3">RISK SCORE</th>
+                <th className="p-3">ACTION</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 font-medium">
+              {districtProjects.map(p => (
+                <tr key={p.id} className="hover:bg-slate-50">
+                  <td className="p-3 max-w-sm">
+                    <p className="font-bold text-slate-900 leading-snug">{p.workTitle}</p>
+                    <p className="text-[10px] text-slate-400 font-mono">{p.projectId}</p>
+                  </td>
+                  <td className="p-3 font-bold text-slate-900">₹{(p.sanctionedAmount / 100000).toFixed(1)} L</td>
+                  <td className="p-3 text-slate-700">{p.vendorName}</td>
+                  <td className="p-3">
+                    <span className="bg-slate-100 text-slate-700 px-2 py-0.5 rounded text-[10px] font-bold border border-slate-200">
+                      {p.status}
+                    </span>
+                  </td>
+                  <td className="p-3">
+                    <span className={`px-2 py-0.5 rounded font-black text-[10px] ${
+                      p.riskLevel === 'CRITICAL' ? 'bg-red-100 text-red-800' :
+                      p.riskLevel === 'HIGH' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'
+                    }`}>
+                      {p.riskScore}/100 ({p.riskLevel})
+                    </span>
+                  </td>
+                  <td className="p-3">
+                    <button 
+                      onClick={() => navigate(`/app/projects/${p.id}`)}
+                      className="bg-blue-600 text-white font-bold px-3 py-1 rounded text-[11px] hover:bg-blue-700 cursor-pointer"
+                    >
+                      Audit
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </div>
 
-      {/* Local Projects Grid */}
-      <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4">
-        <h3 className="text-sm font-bold text-slate-900">District Local Works Queue</h3>
-        <table className="w-full text-left text-xs">
-          <thead className="bg-slate-50 border-b border-slate-200 text-slate-700 font-semibold uppercase">
-            <tr>
-              <th className="p-3">Work Title & ID</th>
-              <th className="p-3">Agency</th>
-              <th className="p-3">Vendor</th>
-              <th className="p-3">Amount</th>
-              <th className="p-3">Risk Score</th>
-              <th className="p-3">Action</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-200">
-            {MOCK_PROJECTS.map(p => (
-              <tr key={p.id} className="hover:bg-slate-50">
-                <td className="p-3 font-bold text-slate-900">{p.workTitle} ({p.projectId})</td>
-                <td className="p-3 text-slate-700">{p.implementingAgency}</td>
-                <td className="p-3 text-slate-700">{p.vendorName}</td>
-                <td className="p-3 font-semibold">₹{(p.actualExpenditure/100000).toFixed(1)} L</td>
-                <td className="p-3 font-bold text-red-600">{p.riskScore}/100</td>
-                <td className="p-3">
-                  <button onClick={() => navigate(`/projects/${p.id}`)} className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-[11px] px-3 py-1 rounded transition">
-                    Field Audit
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
     </div>
   );
 };

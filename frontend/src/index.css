@@ -15,3 +15,7 @@ body {
   height: 100%;
   border-radius: 0.75rem;
 }
+
+.gis-basemap-muted {
+  filter: grayscale(45%) saturate(70%) brightness(1.05) contrast(0.95);
+}

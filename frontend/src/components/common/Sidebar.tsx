@@ -11,9 +11,10 @@ import {
   History, 
   Database,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  MapPin,
+  Camera
 } from './Icons';
-import { StateEmblem } from './StateEmblem';
 import { useAuth } from '../../context/AuthContext';
 import { Role } from '../../types';
 
@@ -26,11 +27,15 @@ interface NavItem {
 const NAV_BY_ROLE: Record<Role, NavItem[]> = {
   MINISTER: [
     { label: 'Executive Overview', path: '/app/minister', icon: BarChart3 },
+    { label: 'GIS Corruption Map', path: '/app/gis-analytics', icon: MapPin },
+    { label: 'Geofence Inspector', path: '/app/geofence-inspector', icon: Camera },
     { label: 'MP Projects Explorer', path: '/app/projects', icon: FolderKanban },
     { label: 'National Analytics', path: '/app/analytics', icon: PieChart }
   ],
   MINISTRY: [
     { label: 'National Overview', path: '/app/ministry', icon: BarChart3 },
+    { label: 'GIS Corruption Map', path: '/app/gis-analytics', icon: MapPin },
+    { label: 'Geofence EXIF Inspector', path: '/app/geofence-inspector', icon: Camera },
     { label: 'Projects Explorer', path: '/app/projects', icon: FolderKanban },
     { label: 'Risk Intelligence', path: '/app/risk-intelligence', icon: ShieldAlert },
     { label: 'Vendors & Cartels', path: '/app/vendors', icon: Building2 },
@@ -42,6 +47,8 @@ const NAV_BY_ROLE: Record<Role, NavItem[]> = {
   ],
   STATE: [
     { label: 'State Overview', path: '/app/state', icon: BarChart3 },
+    { label: 'State GIS Map', path: '/app/gis-analytics', icon: MapPin },
+    { label: 'Geofence Inspector', path: '/app/geofence-inspector', icon: Camera },
     { label: 'District Projects', path: '/app/projects', icon: FolderKanban },
     { label: 'Escalated Cases', path: '/app/investigations', icon: Briefcase },
     { label: 'Vendor Cartels', path: '/app/vendors', icon: Building2 },
@@ -50,6 +57,8 @@ const NAV_BY_ROLE: Record<Role, NavItem[]> = {
   ],
   DISTRICT: [
     { label: 'District Action Hub', path: '/app/district', icon: BarChart3 },
+    { label: 'District GIS Map', path: '/app/gis-analytics', icon: MapPin },
+    { label: 'Geofence EXIF Inspector', path: '/app/geofence-inspector', icon: Camera },
     { label: 'Local Works Queue', path: '/app/projects', icon: FolderKanban },
     { label: 'Field Audits', path: '/app/investigations', icon: Briefcase },
     { label: 'Notifications', path: '/app/notifications', icon: Bell }
@@ -73,7 +82,9 @@ export const Sidebar: React.FC = () => {
         <div className="p-4 flex items-center justify-between border-b border-slate-800">
           {!collapsed && (
             <div className="flex items-center space-x-3">
-              <StateEmblem size={36} darkBg={true} />
+              <div className="w-9 h-9 rounded-lg bg-blue-600 text-white flex items-center justify-center font-bold text-lg shadow">
+                N
+              </div>
               <div>
                 <h1 className="font-extrabold text-white text-base tracking-wide font-serif">NIRMAN</h1>
                 <p className="text-[10px] text-amber-400 font-bold uppercase tracking-wider">
@@ -85,7 +96,9 @@ export const Sidebar: React.FC = () => {
             </div>
           )}
           {collapsed && (
-            <StateEmblem size={32} darkBg={true} className="mx-auto" />
+            <div className="w-8 h-8 rounded-lg bg-blue-600 text-white flex items-center justify-center font-bold text-base mx-auto">
+              N
+            </div>
           )}
 
           <button 
@@ -96,7 +109,7 @@ export const Sidebar: React.FC = () => {
           </button>
         </div>
 
-        {/* Navigation Items (Role-Filtered) */}
+        {/* Navigation Items */}
         <nav className="p-3 space-y-1">
           {currentNavItems.map((item) => {
             const Icon = item.icon;
@@ -120,7 +133,7 @@ export const Sidebar: React.FC = () => {
         </nav>
       </div>
 
-      {/* Bottom Footer (Clean Brand Tag) */}
+      {/* Bottom Footer */}
       {!collapsed && (
         <div className="p-4 text-[10px] text-slate-500 border-t border-slate-800/60 text-center font-mono">
           MoSPI Official Portal • v2.4

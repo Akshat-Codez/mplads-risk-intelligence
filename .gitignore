@@ -5,6 +5,9 @@
 # Node.js dependencies & package manager caches
 node_modules/
 **/node_modules/
+frontend/dist/
+frontend/dist-ssr/
+frontend/.vite/
 .pnpm-store/
 .yarn/
 *.local

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { StateEmblem } from '../components/common/StateEmblem';
-import { UserCheck, KeyRound, ArrowRight, Play } from '../components/common/Icons';
+import { UserCheck, KeyRound } from '../components/common/Icons';
 import { useAuth } from '../context/AuthContext';
 import { Role } from '../types';
 
@@ -119,7 +119,7 @@ export const Login: React.FC = () => {
           
           {/* Official Emblem & Header */}
           <div className="text-center space-y-2">
-            <StateEmblem size={56} className="mx-auto" />
+            <StateEmblem size={64} className="mx-auto" darkBg={false} />
             <div className="text-[11px] font-bold text-slate-800 uppercase tracking-tight leading-snug">
               Government of India <br />
               <span className="text-blue-900">Ministry of Statistics and Programme Implementation</span> <br />
@@ -235,7 +235,7 @@ export const Login: React.FC = () => {
 
             <button
               type="submit"
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg shadow transition text-sm"
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg shadow transition text-sm cursor-pointer"
             >
               Login as {selectedRole === 'DISTRICT' ? `${selectedDistrict} DC` : selectedRole === 'STATE' ? `${selectedState} Nodal` : 'National Authority'}
             </button>
@@ -255,8 +255,8 @@ export const Login: React.FC = () => {
               <button onClick={() => handleDemoMode('STATE', 'Karnataka')} className="p-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-900 font-bold rounded border border-emerald-200">
                 🏢 State Nodal (Karnataka)
               </button>
-              <button onClick={() => handleDemoMode('DISTRICT', 'Karnataka', 'BENGALURU URBAN')} className="p-1.5 bg-purple-50 hover:bg-purple-100 text-purple-900 font-bold rounded border border-purple-200">
-                📍 DC Bengaluru Urban
+              <button onClick={() => handleDemoMode('DISTRICT', 'Bihar', 'PURBI CHAMPARAN')} className="p-1.5 bg-purple-50 hover:bg-purple-100 text-purple-900 font-bold rounded border border-purple-200">
+                📍 DC Purbi Champaran
               </button>
               <button onClick={() => handleDemoMode('STATE', 'Uttar Pradesh')} className="p-1.5 bg-amber-50 hover:bg-amber-100 text-amber-900 font-bold rounded border border-amber-200">
                 🏢 State Nodal (Uttar Pradesh)

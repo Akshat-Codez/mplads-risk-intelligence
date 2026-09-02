@@ -112,3 +112,4 @@ Thumbs.db
 *.tmp
 *.bak
 scratch/
+backups/

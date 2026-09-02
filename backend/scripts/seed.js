@@ -13,6 +13,8 @@ async function main() {
   await prisma.caseAction.deleteMany({});
   await prisma.case.deleteMany({});
   await prisma.anomaly.deleteMany({});
+  await prisma.feedback.deleteMany({});
+  await prisma.procurement.deleteMany({});
   await prisma.project.deleteMany({});
   console.log('Cleared existing project data.');
 

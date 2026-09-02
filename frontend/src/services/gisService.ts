@@ -59,6 +59,32 @@ const DISTRICT_COORDINATES: Record<string, [number, number]> = {
 };
 
 /**
+ * Centralized Official Risk Level & Color Mapping Function
+ * Used across GIS Maps, Project Detail Dossiers, and Dashboard Tables
+ */
+export function getRiskCategoryAndColor(score: number, level?: string): { category: 'CRITICAL' | 'HIGH' | 'MODERATE' | 'LOW'; color: string } {
+  const normLevel = (level || '').toUpperCase().trim();
+
+  // 1. Critical tier (score >= 80 or explicit CRITICAL level)
+  if (normLevel === 'CRITICAL' || score >= 80) {
+    return { category: 'CRITICAL', color: '#991B1B' }; // Dark Red
+  }
+
+  // 2. High Risk Review tier (score >= 50 or explicit HIGH level)
+  if (normLevel === 'HIGH' || score >= 50) {
+    return { category: 'HIGH', color: '#EF4444' }; // Red
+  }
+
+  // 3. Moderate / Medium Watch tier (score >= 25 or explicit MEDIUM/MODERATE level)
+  if (normLevel === 'MEDIUM' || normLevel === 'MODERATE' || score >= 25) {
+    return { category: 'MODERATE', color: '#F59E0B' }; // Amber / Yellow
+  }
+
+  // 4. Low Risk Baseline tier (score < 25 or explicit LOW level)
+  return { category: 'LOW', color: '#10B981' }; // Green
+}
+
+/**
  * Dynamically computes State-level GIS Risk Metrics from dataset
  */
 export function computeStateGISMetrics(projects: Project[]): StateGISMetrics[] {
@@ -71,8 +97,10 @@ export function computeStateGISMetrics(projects: Project[]): StateGISMetrics[] {
     }
     stateMap[st].total += 1;
     stateMap[st].sumSanctioned += p.sanctionedAmount || 0;
-    stateMap[st].sumScore += p.riskScore || 0;
-    if (p.riskScore >= 60 || p.riskLevel === 'HIGH' || p.riskLevel === 'CRITICAL') {
+    const s = p.riskScore ?? p.prototype_risk_score ?? 0;
+    stateMap[st].sumScore += s;
+    const l = p.riskLevel || p.risk_level;
+    if (s >= 50 || l === 'HIGH' || l === 'CRITICAL') {
       stateMap[st].highRisk += 1;
     }
   });
@@ -87,10 +115,10 @@ export function computeStateGISMetrics(projects: Project[]): StateGISMetrics[] {
 
     if (avgScore >= 50 || highRiskRatio > 0.15 || data.highRisk >= 3) {
       riskCategory = 'HIGH';
-      color = '#EF4444'; // Red (High corruption likelihood)
-    } else if (avgScore >= 30 || highRiskRatio > 0.05 || data.highRisk >= 1) {
+      color = '#EF4444'; // Red (High risk priority)
+    } else if (avgScore >= 25 || highRiskRatio > 0.05 || data.highRisk >= 1) {
       riskCategory = 'MODERATE';
-      color = '#F59E0B'; // Yellow (Moderate watch)
+      color = '#F59E0B'; // Yellow/Amber (Moderate watch)
     }
 
     const coords = STATE_COORDINATES[stKey] || [20.5937, 78.9629];
@@ -115,7 +143,7 @@ export function computeStateGISMetrics(projects: Project[]): StateGISMetrics[] {
 export function computeDistrictGISMetrics(projects: Project[], selectedState: string): DistrictGISMetrics[] {
   const stateProjects = selectedState === 'ALL'
     ? projects
-    : projects.filter(p => p.state.toUpperCase().includes(selectedState.toUpperCase()));
+    : projects.filter(p => p.state && p.state.toUpperCase().includes(selectedState.toUpperCase()));
 
   const districtMap: Record<string, { total: number; sumSanctioned: number; highRisk: number; sumScore: number; state: string }> = {};
 
@@ -127,8 +155,10 @@ export function computeDistrictGISMetrics(projects: Project[], selectedState: st
     }
     districtMap[dst].total += 1;
     districtMap[dst].sumSanctioned += p.sanctionedAmount || 0;
-    districtMap[dst].sumScore += p.riskScore || 0;
-    if (p.riskScore >= 60 || p.riskLevel === 'HIGH' || p.riskLevel === 'CRITICAL') {
+    const s = p.riskScore ?? p.prototype_risk_score ?? 0;
+    districtMap[dst].sumScore += s;
+    const l = p.riskLevel || p.risk_level;
+    if (s >= 50 || l === 'HIGH' || l === 'CRITICAL') {
       districtMap[dst].highRisk += 1;
     }
   });
@@ -144,9 +174,9 @@ export function computeDistrictGISMetrics(projects: Project[], selectedState: st
     if (avgScore >= 50 || highRiskRatio > 0.15 || data.highRisk >= 2) {
       riskCategory = 'HIGH';
       color = '#EF4444'; // Red
-    } else if (avgScore >= 30 || highRiskRatio > 0.05 || data.highRisk >= 1) {
+    } else if (avgScore >= 25 || highRiskRatio > 0.05 || data.highRisk >= 1) {
       riskCategory = 'MODERATE';
-      color = '#F59E0B'; // Yellow
+      color = '#F59E0B'; // Yellow/Amber
     }
 
     const coords = DISTRICT_COORDINATES[dstKey] || [12.9716, 77.5946];

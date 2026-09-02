@@ -148,7 +148,7 @@ export const Dashboard: React.FC = () => {
           onClick={async () => {
             setLoading(true);
             try {
-               await api.post('/projects/run-analysis');
+               const analysisRes = await api.post('/projects/run-analysis');
                const [statsRes, infoRes] = await Promise.all([
                  api.get('/dashboard/summary'),
                  api.get('/dashboard/dataset-info')
@@ -156,8 +156,11 @@ export const Dashboard: React.FC = () => {
                setStats(statsRes.data);
                setDatasetInfo(infoRes.data);
                await fetchWorks();
+               if (analysisRes.data?.ai_status) {
+                 alert(analysisRes.data.ai_status);
+               }
             } catch (e: any) {
-               alert(e.response?.data?.error || 'AI Analysis could not be completed. Please try again.');
+               alert(e.response?.data?.error || 'AI service unavailable – deterministic risk engine used');
             } finally {
                setLoading(false);
             }

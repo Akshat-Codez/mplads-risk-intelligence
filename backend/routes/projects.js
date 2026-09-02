@@ -102,6 +102,33 @@ function mapProjectToFrontend(project) {
   p.documents_checklist = safeParseJSON(p.documentsChecklist, {});
   p.progress_timeline = safeParseJSON(p.progressTimeline, []);
 
+  // Ensure document compliance checklist is calculated from actual available data
+  if (!p.documents_checklist || Object.keys(p.documents_checklist).length === 0) {
+    const hasSanction = Boolean(p.sanctionDate || (p.sanctionedAmount && p.sanctionedAmount > 0));
+    const hasSpent = Boolean((p.totalDisbursed && p.totalDisbursed > 0) || (p.paymentCount && p.paymentCount > 0));
+    const statusStr = (p.workStatus || '').toLowerCase();
+    const isCompleted = statusStr.includes('completed') || Boolean(p.actualCompletionDate);
+    const isInspected = statusStr.includes('inspection') || isCompleted;
+
+    p.documents_checklist = {
+      aa: Boolean(p.recommendationDate || p.recommendedAmount || p.sanctionDate),
+      ts: hasSanction,
+      estimate: Boolean(p.recommendedAmount || p.sanctionedAmount),
+      boq: hasSanction,
+      tender: Boolean(p.vendorName || hasSanction),
+      workOrder: Boolean(p.workOrderDate || p.vendorName || hasSpent || ['work in progress', 'work partially completed', 'work completed', 'physical inspection'].some(s => statusStr.includes(s))),
+      mb: Boolean(hasSpent || isInspected),
+      bills: hasSpent,
+      uc: Boolean(p.totalDisbursed && p.sanctionedAmount && (p.totalDisbursed / p.sanctionedAmount) >= 0.5),
+      cc: isCompleted,
+      inspection: isInspected,
+      photos: Boolean(p.imageAvailable)
+    };
+  }
+
+  const docCount = Object.values(p.documents_checklist).filter(Boolean).length;
+  p.document_completeness = p.documentCompleteness || Math.round((docCount / 12) * 100);
+
   return p;
 }
 
@@ -121,6 +148,9 @@ router.get('/', authMiddleware, async (req, res) => {
       year,
       risk_level,
       search,
+      vendor,
+      vendor_name,
+      contractor,
       sort_by = 'riskScore',
       sort_order = 'desc'
     } = req.query;
@@ -137,6 +167,12 @@ router.get('/', authMiddleware, async (req, res) => {
     if (work_type) where.workType = work_type;
     if (status) where.workStatus = status;
     if (risk_level) where.riskLevel = risk_level.toUpperCase();
+
+    // Apply vendor/contractor filter
+    const vendorQuery = vendor || vendor_name || contractor;
+    if (vendorQuery && vendorQuery !== 'ALL') {
+      where.vendorName = { contains: vendorQuery.trim() };
+    }
 
     // Year filter
     if (year) {
@@ -234,7 +270,7 @@ router.get('/:id', authMiddleware, async (req, res) => {
     // Verify authority scope authorization
     if (!isProjectInScope(req.user, project)) {
       return res.status(403).json({
-        error: `Access denied. Project '${projectId}' in ${project.district || 'Unknown'}, ${project.state || 'Unknown'} is outside your authorized authority scope.`
+        error: `Access denied. Project '${rawId}' in ${project.district || 'Unknown'}, ${project.state || 'Unknown'} is outside your authorized authority scope.`
       });
     }
 
@@ -363,6 +399,142 @@ router.post('/:id/investigate', authMiddleware, async (req, res) => {
   } catch (err) {
     console.error('Error updating investigation:', err);
     res.status(500).json({ error: 'Failed to update investigation' });
+  }
+});
+
+// GET /api/projects/:id/audit - retrieve audit dossier and inspection case for project
+router.get('/:id/audit', authMiddleware, async (req, res) => {
+  try {
+    const rawId = decodeURIComponent(req.params.id);
+    const project = await prisma.project.findFirst({
+      where: {
+        OR: [
+          { projectId: rawId },
+          { id: rawId }
+        ]
+      },
+      include: {
+        cases: {
+          orderBy: { createdAt: 'desc' },
+          include: {
+            actions: {
+              orderBy: { createdAt: 'desc' }
+            }
+          }
+        },
+        procurements: {
+          orderBy: { createdAt: 'desc' },
+          take: 1
+        },
+        feedback: {
+          orderBy: { createdAt: 'desc' },
+          include: {
+            createdBy: {
+              select: { id: true, name: true, role: true, authorityId: true }
+            }
+          }
+        }
+      }
+    });
+
+    if (!project) {
+      return res.status(404).json({ error: `Project '${rawId}' not found in database.` });
+    }
+
+    if (!isProjectInScope(req.user, project)) {
+      return res.status(403).json({
+        error: `Access denied. Project '${rawId}' in ${project.district || 'Unknown'}, ${project.state || 'Unknown'} is outside your authorized authority scope.`
+      });
+    }
+
+    const mapped = mapProjectToFrontend(project);
+    const latestCase = project.cases && project.cases.length > 0 ? project.cases[0] : null;
+    mapped.investigation_status = latestCase ? latestCase.status : 'Unreviewed';
+    mapped.investigation_info = {
+      status: latestCase ? latestCase.status : 'Unreviewed',
+      notes: latestCase && latestCase.actions && latestCase.actions.length > 0 ? latestCase.actions[0].notes : ''
+    };
+    mapped.audit_cases = project.cases || [];
+    mapped.audit_feedbacks = project.feedback || [];
+
+    res.json(mapped);
+  } catch (err) {
+    console.error('Error fetching project audit information:', err);
+    res.status(500).json({ error: 'Failed to retrieve project audit information' });
+  }
+});
+
+// POST /api/projects/:id/audit - create/start an audit or submit inspection findings
+router.post('/:id/audit', authMiddleware, async (req, res) => {
+  try {
+    const rawId = decodeURIComponent(req.params.id);
+    const { status, notes, priority } = req.body;
+
+    const project = await prisma.project.findFirst({
+      where: {
+        OR: [
+          { projectId: rawId },
+          { id: rawId }
+        ]
+      }
+    });
+
+    if (!project) {
+      return res.status(404).json({ error: `Project '${rawId}' not found` });
+    }
+
+    if (!isProjectInScope(req.user, project)) {
+      return res.status(403).json({
+        error: `Access denied. Cannot create audit for project '${rawId}' outside your authorized authority scope.`
+      });
+    }
+
+    // Resolve valid user foreign key
+    let officerUser = req.user.id ? await prisma.user.findUnique({ where: { id: req.user.id } }) : null;
+    if (!officerUser) {
+      officerUser = await prisma.user.findFirst();
+    }
+    const creatorId = officerUser ? officerUser.id : req.user.id;
+
+    const caseNumber = `AUD-${Date.now().toString().slice(-6)}`;
+    const newCase = await prisma.case.create({
+      data: {
+        caseNumber,
+        projectId: project.id,
+        title: `Official Audit Dossier for ${project.projectId}`,
+        priority: priority || (project.riskScore >= 50 ? 'HIGH' : 'MEDIUM'),
+        status: status || 'Under Audit',
+        createdById: creatorId
+      }
+    });
+
+    await prisma.caseAction.create({
+      data: {
+        caseId: newCase.id,
+        userId: creatorId,
+        action: 'START_AUDIT',
+        notes: notes || 'Official audit initiated by authorized authority officer.'
+      }
+    });
+
+    await prisma.auditLog.create({
+      data: {
+        userId: creatorId,
+        projectId: project.id,
+        action: 'INITIATE_PROJECT_AUDIT',
+        entity: 'ProjectAudit',
+        details: `Audit dossier initiated for project ${project.projectId} by ${req.user.name || req.user.authorityId}.`
+      }
+    });
+
+    res.status(201).json({
+      success: true,
+      message: 'Audit record created successfully',
+      case: newCase
+    });
+  } catch (err) {
+    console.error('Error initiating project audit:', err);
+    res.status(500).json({ error: 'Failed to initiate project audit' });
   }
 });
 
@@ -597,10 +769,14 @@ router.post('/run-analysis', authMiddleware, async (req, res) => {
     // Attempt 1: Call FastAPI microservice if running
     try {
       console.log('[AI DEBUG] Calling AI service at:', `${aiServiceUrl}/api/run_analysis`);
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 3000); // 3s timeout
       const response = await fetch(`${aiServiceUrl}/api/run_analysis`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' }
+        headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal
       });
+      clearTimeout(timeoutId);
       console.log('[AI DEBUG] AI response status:', response.status);
       if (response.ok) {
         const body = await response.json();
@@ -611,23 +787,16 @@ router.post('/run-analysis', authMiddleware, async (req, res) => {
         console.warn('[AI DEBUG] FastAPI error:', errText);
       }
     } catch (connErr) {
-      console.log('[AI DEBUG] FastAPI microservice on port 8000 not reachable (', connErr.message, '). Falling back to direct Python pipeline execution...');
+      console.log('[AI DEBUG] FastAPI microservice on port 8000 not reachable (', connErr.message, '). Falling back to deterministic risk engine...');
     }
 
-    // Attempt 2: Direct local Python pipeline execution
+    // Attempt 2: If external service was not reachable, execute deterministic risk engine directly in Node
     if (!analysisRan) {
-      console.log('[AI DEBUG] Preparing AI input: Executing scripts/run_risk_pipeline.py directly...');
-      const pythonExecutable = process.platform === 'win32' ? 'python' : 'python3';
-      const rootDir = path.resolve(process.cwd(), '..');
-      execSync(`${pythonExecutable} scripts/run_risk_pipeline.py`, {
-        cwd: rootDir,
-        stdio: 'inherit'
-      });
-      console.log('[AI DEBUG] Direct Python ML risk pipeline execution completed.');
+      console.log('[AI DEBUG] External AI service unavailable. Executing deterministic risk engine directly on database...');
+    } else {
+      console.log('[AI DEBUG] Syncing database with scored dataset...');
+      await syncDatabaseWithScoredCsv();
     }
-
-    console.log('[AI DEBUG] Syncing database with scored dataset...');
-    await syncDatabaseWithScoredCsv();
 
     console.log('[AI DEBUG] Recalculating 7-dimension risk aggregations...');
     await recalculateOverallProjectRisks(prisma);
@@ -641,12 +810,23 @@ router.post('/run-analysis', authMiddleware, async (req, res) => {
           userId: req.user.id,
           action: 'RUN_AI_ANALYSIS',
           entity: 'System',
-          details: 'Triggered full-constituency AI anomaly and financial z-score risk re-analysis.'
+          details: analysisRan 
+            ? 'Triggered full-constituency AI anomaly and financial z-score risk re-analysis.'
+            : 'Executed deterministic multi-dimensional risk engine recalculation (AI microservice offline fallback).'
         }
       });
     }
 
-    res.json({ message: 'AI Analysis complete and database synced successfully.' });
+    res.json({
+      success: true,
+      message: analysisRan 
+        ? 'AI Analysis complete and database synced successfully.' 
+        : 'AI service unavailable – deterministic risk engine used',
+      ai_status: analysisRan 
+        ? 'AI Analysis complete' 
+        : 'AI service unavailable – deterministic risk engine used',
+      fallbackUsed: !analysisRan
+    });
   } catch (err) {
     console.error('[AI DEBUG] Error running analysis:', err);
     res.status(500).json({ error: 'AI Analysis could not be completed. Please try again.' });

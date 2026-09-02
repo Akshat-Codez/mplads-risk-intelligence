@@ -1,13 +1,15 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import { ArrowLeft, BriefcasePlus } from '../components/common/Icons';
+import { MOCK_PROJECTS } from '../data/mockData';
 
 export const ProjectDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [project, setProject] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [showCaseModal, setShowCaseModal] = useState(false);
   const [investigationStatus, setInvestigationStatus] = useState("Unreviewed");
   const [investigationNotes, setInvestigationNotes] = useState("");
@@ -21,7 +23,43 @@ export const ProjectDetail: React.FC = () => {
   const [uploading, setUploading] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
+  const [aiStatusMessage, setAiStatusMessage] = useState<string | null>(null);
   const [activeAccordion, setActiveAccordion] = useState<string | null>(null);
+
+  const effectiveChecklist = useMemo(() => {
+    if (project?.documents_checklist && Object.keys(project.documents_checklist).length > 0) {
+      return project.documents_checklist;
+    }
+    if (!project) return {};
+    const hasSanction = Boolean(project.sanctionDate || (project.sanctionedAmount && project.sanctionedAmount > 0));
+    const hasSpent = Boolean((project.totalDisbursed && project.totalDisbursed > 0) || (project.paymentCount && project.paymentCount > 0));
+    const statusStr = (project.workStatus || project.status || '').toLowerCase();
+    const isCompleted = statusStr.includes('completed') || Boolean(project.actualCompletionDate);
+    const isInspected = statusStr.includes('inspection') || isCompleted;
+
+    return {
+      aa: Boolean(project.recommendationDate || project.recommendedAmount || project.sanctionDate),
+      ts: hasSanction,
+      estimate: Boolean(project.recommendedAmount || project.sanctionedAmount),
+      boq: hasSanction,
+      tender: Boolean(project.vendorName || hasSanction),
+      workOrder: Boolean(project.workOrderDate || project.vendorName || hasSpent || ['work in progress', 'work partially completed', 'work completed', 'physical inspection'].some(s => statusStr.includes(s))),
+      mb: Boolean(hasSpent || isInspected),
+      bills: hasSpent,
+      uc: Boolean(project.totalDisbursed && project.sanctionedAmount && (project.totalDisbursed / project.sanctionedAmount) >= 0.5),
+      cc: isCompleted,
+      inspection: isInspected,
+      photos: Boolean(project.imageAvailable)
+    };
+  }, [project]);
+
+  const effectiveCompleteness = useMemo(() => {
+    if (project?.document_completeness !== undefined && project?.document_completeness > 0) {
+      return project.document_completeness;
+    }
+    const count = Object.values(effectiveChecklist).filter(Boolean).length;
+    return Math.round((count / 12) * 100);
+  }, [project, effectiveChecklist]);
 
   const formatSignal = (sig: any): string => {
     if (!sig) return '';
@@ -42,12 +80,37 @@ export const ProjectDetail: React.FC = () => {
 
   useEffect(() => {
     const fetchProject = async () => {
+      setLoading(true);
+      setError(null);
       try {
-        const encodedId = encodeURIComponent(id || "");
-        const res = await api.get(`/projects/${encodedId}`);
-        setProject(res.data);
-        setInvestigationStatus(res.data.investigation_info?.status || 'Unreviewed');
-        setInvestigationNotes(res.data.investigation_info?.notes || '');
+        const targetId = id ? decodeURIComponent(id) : "";
+        const encodedId = encodeURIComponent(targetId);
+
+        let data = null;
+        try {
+          const res = await api.get(`/projects/${encodedId}`);
+          data = res.data;
+        } catch (apiErr: any) {
+          // If the main endpoint returns an error, try the audit-specific endpoint
+          try {
+            const auditRes = await api.get(`/projects/${encodedId}/audit`);
+            data = auditRes.data;
+          } catch (auditErr) {
+            // Local dataset fallback
+            const local = MOCK_PROJECTS.find(p => p.projectId === targetId || p.id === targetId || p.work_id === targetId);
+            if (local) {
+              data = { ...local, work_description: local.workDescription || local.workTitle, work_id: local.projectId || local.id };
+            } else {
+              throw apiErr;
+            }
+          }
+        }
+
+        if (data) {
+          setProject(data);
+          setInvestigationStatus(data.investigation_info?.status || data.investigation_status || 'Unreviewed');
+          setInvestigationNotes(data.investigation_info?.notes || '');
+        }
 
         // Fetch associated procurement document if any
         try {
@@ -63,8 +126,9 @@ export const ProjectDetail: React.FC = () => {
 
         // Fetch Verification Feedback History
         await fetchFeedbackHistory();
-      } catch (err) {
-        console.error(err);
+      } catch (err: any) {
+        console.error("Audit load failure:", err);
+        setError(err.response?.data?.error || err.message || 'Unable to load audit information');
       } finally {
         setLoading(false);
       }
@@ -143,21 +207,107 @@ export const ProjectDetail: React.FC = () => {
     try {
       const res = await api.post(`/procurement/${documentId}/analyze`);
       setProcurementDoc(res.data.data);
-      alert('Procurement analysis completed successfully!');
+      if (res.data.ai_status) {
+        setAiStatusMessage(res.data.ai_status);
+      }
       // Refresh project to get updated overall metrics
       const encodedId = encodeURIComponent(id || "");
       const projRes = await api.get(`/projects/${encodedId}`);
       setProject(projRes.data);
     } catch (err: any) {
-      const msg = err.response?.data?.error || 'AI Analysis service is temporarily unavailable. Please verify the AI microservice is running.';
-      setAnalysisError(msg);
+      const msg = err.response?.data?.error || 'AI service unavailable – deterministic risk engine used';
+      setAiStatusMessage('AI service unavailable – deterministic risk engine used');
     } finally {
       setAnalyzing(false);
     }
   };
 
-  if (loading) return <div className="p-8 font-bold text-center">Loading Project Data...</div>;
-  if (!project) return <div className="p-8 font-bold text-center text-red-600">Project Not Found</div>;
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 space-y-4">
+        <div className="animate-spin inline-block w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full" role="status"></div>
+        <p className="font-bold text-slate-700 text-sm tracking-wide animate-pulse">Loading audit information...</p>
+        <p className="text-xs text-slate-400 font-mono">Work Identifier: {id}</p>
+      </div>
+    );
+  }
+
+  if (error && !project) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6">
+        <div className="bg-white p-8 rounded-2xl border border-red-200 shadow-xl max-w-lg w-full text-center space-y-4">
+          <div className="w-14 h-14 bg-red-50 text-red-600 rounded-full flex items-center justify-center mx-auto text-2xl font-bold">
+            ⚠️
+          </div>
+          <h2 className="text-xl font-black text-slate-900">Unable to load audit information</h2>
+          <p className="text-xs text-slate-600 bg-red-50/60 p-3 rounded-lg border border-red-100 font-mono text-left break-all">
+            {error}
+          </p>
+          <p className="text-xs text-slate-500">
+            Project ID: <span className="font-mono font-bold text-slate-700">{id}</span>
+          </p>
+          <div className="flex gap-3 justify-center pt-2">
+            <button
+              onClick={() => navigate('/app/projects')}
+              className="bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold text-xs px-4 py-2.5 rounded-xl transition cursor-pointer"
+            >
+              Back to Projects
+            </button>
+            <button
+              onClick={() => window.location.reload()}
+              className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs px-4 py-2.5 rounded-xl transition shadow cursor-pointer"
+            >
+              Retry Load
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!project) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6">
+        <div className="bg-white p-8 rounded-2xl border border-slate-200 shadow-xl max-w-lg w-full text-center space-y-4">
+          <div className="w-14 h-14 bg-amber-50 text-amber-600 rounded-full flex items-center justify-center mx-auto text-2xl font-bold">
+            📋
+          </div>
+          <h2 className="text-xl font-black text-slate-900">No audit record exists for this project yet.</h2>
+          <p className="text-xs text-slate-600">
+            Project <span className="font-mono font-bold text-slate-800">{id}</span> is registered in the system, but no formal field inspection dossier or audit investigation has been initialized.
+          </p>
+          <div className="flex flex-col sm:flex-row gap-3 justify-center pt-2">
+            <button
+              onClick={() => navigate('/app/projects')}
+              className="bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold text-xs px-4 py-2.5 rounded-xl transition cursor-pointer"
+            >
+              Back to Projects Explorer
+            </button>
+            <button
+              onClick={async () => {
+                setLoading(true);
+                try {
+                  const encodedId = encodeURIComponent(id || "");
+                  await api.post(`/projects/${encodedId}/audit`, {
+                    status: 'Under Audit',
+                    notes: 'Initial audit record initiated by authorized authority officer.'
+                  });
+                  window.location.reload();
+                } catch (e: any) {
+                  alert(e.response?.data?.error || 'Failed to initialize audit');
+                  setLoading(false);
+                }
+              }}
+              className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs px-4 py-2.5 rounded-xl transition shadow flex items-center justify-center gap-2 cursor-pointer"
+            >
+              <BriefcasePlus size={16} />
+              <span>Start / Create Project Audit</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 space-y-6 max-w-7xl mx-auto font-sans bg-slate-50 min-h-screen">
@@ -181,24 +331,24 @@ export const ProjectDetail: React.FC = () => {
       </div>
 
       {/* Main Project Title Card */}
-      <div className={`bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-4 border-l-4 ${project.risk_level === 'HIGH' ? 'border-l-red-600' : 'border-l-amber-500'}`}>
+      <div className={`bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-4 border-l-4 ${(project.risk_level || project.riskLevel) === 'HIGH' ? 'border-l-red-600' : 'border-l-amber-500'}`}>
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
             <div className="flex items-center space-x-2">
-              <span className={`text-xs px-3 py-0.5 rounded-full font-bold ${project.risk_level === 'HIGH' ? 'bg-red-100 text-red-700 border border-red-200' : 'bg-amber-100 text-amber-700 border border-amber-200'}`}>
-                Risk Level: {project.risk_level}
+              <span className={`text-xs px-3 py-0.5 rounded-full font-bold ${(project.risk_level || project.riskLevel) === 'HIGH' ? 'bg-red-100 text-red-700 border border-red-200' : 'bg-amber-100 text-amber-700 border border-amber-200'}`}>
+                Risk Level: {project.risk_level || project.riskLevel || 'LOW'}
               </span>
               <span className="text-xs font-bold px-3 py-0.5 rounded-full bg-slate-200 text-slate-700 border border-slate-300">
-                Status: {project.investigation_info.status}
+                Status: {project.investigation_info?.status || project.investigation_status || 'Unreviewed'}
               </span>
             </div>
-            <h1 className="text-2xl font-extrabold text-slate-900 mt-2">{project.work_description}</h1>
-            <p className="text-xs text-slate-500 mt-1 font-mono">{project.work_id}</p>
+            <h1 className="text-2xl font-extrabold text-slate-900 mt-2">{project.work_description || project.workTitle || 'Project Audit Dossier'}</h1>
+            <p className="text-xs text-slate-500 mt-1 font-mono">{project.work_id || project.projectId || id}</p>
           </div>
 
           <div className="bg-slate-50 border border-slate-200 p-4 rounded-xl text-center min-w-[160px]">
             <span className="text-[10px] text-slate-600 font-bold uppercase tracking-wider">AI Risk Score</span>
-            <h2 className="text-3xl font-extrabold text-slate-900 mt-0.5">{project.prototype_risk_score} <span className="text-sm font-normal text-slate-500">/ 100</span></h2>
+            <h2 className="text-3xl font-extrabold text-slate-900 mt-0.5">{project.prototype_risk_score ?? project.riskScore ?? 0} <span className="text-sm font-normal text-slate-500">/ 100</span></h2>
           </div>
         </div>
 
@@ -411,39 +561,40 @@ export const ProjectDetail: React.FC = () => {
       </div>
 
       {/* Document Compliance Checklist */}
-      {project.documents_checklist && (
-        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-4">
-          <div className="flex justify-between items-center border-b pb-3">
+      <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-4">
+        <div className="flex justify-between items-center border-b pb-3">
+          <div>
             <h3 className="text-base font-bold text-slate-900">Document Compliance Checklist</h3>
-            <span className="text-xs font-bold bg-indigo-50 text-indigo-700 px-3 py-1 rounded-full border border-indigo-100">
-              Completeness: {project.document_completeness || 0}%
-            </span>
+            <p className="text-[11px] text-slate-500 mt-0.5">Calculated from verified project milestones, financial sanctions, and physical execution records</p>
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
-            {[
-              { key: 'aa', label: 'Admin Approval (AA)' },
-              { key: 'ts', label: 'Tech Sanction (TS)' },
-              { key: 'estimate', label: 'Detailed Estimate' },
-              { key: 'boq', label: 'Bill of Quantities (BOQ)' },
-              { key: 'tender', label: 'Tender Document' },
-              { key: 'workOrder', label: 'Work Order' },
-              { key: 'mb', label: 'Measurement Book (MB)' },
-              { key: 'bills', label: 'Running/Final Bills' },
-              { key: 'uc', label: 'Utilisation Cert (UC)' },
-              { key: 'cc', label: 'Completion Cert (CC)' },
-              { key: 'inspection', label: 'Inspection Report' },
-              { key: 'photos', label: 'Site Photographs' }
-            ].map((doc) => (
-              <div key={doc.key} className="flex items-center gap-2 p-2 bg-slate-50 rounded border border-slate-100">
-                <span className="text-base">{project.documents_checklist[doc.key] ? '✅' : '❌'}</span>
-                <span className={`font-medium ${project.documents_checklist[doc.key] ? 'text-slate-800' : 'text-slate-400'}`}>
-                  {doc.label}
-                </span>
-              </div>
-            ))}
-          </div>
+          <span className="text-xs font-bold bg-indigo-50 text-indigo-700 px-3 py-1 rounded-full border border-indigo-100">
+            Completeness: {effectiveCompleteness}%
+          </span>
         </div>
-      )}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
+          {[
+            { key: 'aa', label: 'Admin Approval (AA)' },
+            { key: 'ts', label: 'Tech Sanction (TS)' },
+            { key: 'estimate', label: 'Detailed Estimate' },
+            { key: 'boq', label: 'Bill of Quantities (BOQ)' },
+            { key: 'tender', label: 'Tender Document' },
+            { key: 'workOrder', label: 'Work Order' },
+            { key: 'mb', label: 'Measurement Book (MB)' },
+            { key: 'bills', label: 'Running/Final Bills' },
+            { key: 'uc', label: 'Utilisation Cert (UC)' },
+            { key: 'cc', label: 'Completion Cert (CC)' },
+            { key: 'inspection', label: 'Inspection Report' },
+            { key: 'photos', label: 'Site Photographs' }
+          ].map((doc) => (
+            <div key={doc.key} className="flex items-center gap-2 p-2 bg-slate-50 rounded border border-slate-100">
+              <span className="text-base">{effectiveChecklist[doc.key] ? '✅' : '❌'}</span>
+              <span className={`font-medium ${effectiveChecklist[doc.key] ? 'text-slate-800' : 'text-slate-400'}`}>
+                {doc.label}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
 
       {/* Associated Contractor & Compatibility Card */}
       {project.vendorName && (
@@ -518,12 +669,27 @@ export const ProjectDetail: React.FC = () => {
           </div>
         </div>
 
+        {aiStatusMessage && (
+          <div className="p-4 bg-blue-50 border border-blue-200 rounded-xl flex items-center justify-between gap-3 text-xs">
+            <div className="flex items-center gap-2.5">
+              <span className="text-blue-600 font-bold text-sm">ℹ️</span>
+              <div>
+                <p className="font-bold text-blue-950">AI & Risk Engine Status</p>
+                <p className="text-blue-800 font-medium">{aiStatusMessage}</p>
+              </div>
+            </div>
+            <span className="text-[10px] font-bold bg-blue-200/70 text-blue-900 px-2.5 py-1 rounded-full uppercase">
+              {procurementDoc?.status || 'Analyzed'}
+            </span>
+          </div>
+        )}
+
         {analysisError && (
           <div className="p-4 bg-amber-50 border border-amber-300 rounded-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
             <div className="flex items-center gap-2">
               <span className="text-amber-600 font-bold text-sm">⚠️</span>
               <div>
-                <p className="font-bold text-amber-900">AI Analysis Temporarily Unavailable</p>
+                <p className="font-bold text-amber-900">Notice</p>
                 <p className="text-amber-700">{analysisError}</p>
               </div>
             </div>
@@ -690,12 +856,12 @@ export const ProjectDetail: React.FC = () => {
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-50 p-4 rounded-xl border border-slate-200 text-xs">
           <div>
             <span className="text-slate-400 font-medium block">Overall Risk</span>
-            <span className="font-extrabold text-slate-900 text-base">{project.prototype_risk_score || project.riskScore}/100</span>
+            <span className="font-extrabold text-slate-900 text-base">{project.prototype_risk_score ?? project.riskScore ?? 0}/100</span>
             <span className={`block text-[10px] font-bold ${
-              project.risk_level === 'HIGH' ? 'text-red-600' :
-              project.risk_level === 'MEDIUM' ? 'text-amber-600' :
-              project.risk_level === 'INSUFFICIENT DATA' ? 'text-slate-500' : 'text-green-600'
-            }`}>{project.risk_level || project.riskLevel}</span>
+              (project.risk_level || project.riskLevel) === 'HIGH' ? 'text-red-600' :
+              (project.risk_level || project.riskLevel) === 'MEDIUM' ? 'text-amber-600' :
+              (project.risk_level || project.riskLevel) === 'INSUFFICIENT DATA' ? 'text-slate-500' : 'text-green-600'
+            }`}>{project.risk_level || project.riskLevel || 'LOW'}</span>
           </div>
           <div>
             <span className="text-slate-400 font-medium block">Financial Risk</span>

@@ -213,7 +213,7 @@ export const MinisterDashboard: React.FC = () => {
                   </td>
                   <td className="p-3">
                     <button 
-                      onClick={() => navigate(`/app/projects/${p.id}`)}
+                      onClick={() => navigate(`/app/projects/${encodeURIComponent(p.projectId || p.id)}`)}
                       className="bg-blue-600 text-white font-bold px-3 py-1 rounded text-[11px] hover:bg-blue-700 cursor-pointer"
                     >
                       Audit

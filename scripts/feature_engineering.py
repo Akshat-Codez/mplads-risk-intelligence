@@ -7,8 +7,13 @@ PROCESSED_DIR = 'data/processed'
 def generate_features(df):
     df = df.copy()
     
-    # Ensure dates are datetime objects
-    date_cols = ['recommendation_date', 'sanction_date', 'first_payment_date', 'last_payment_date', 'actual_completion_date']
+    # Ensure dates are datetime objects (supporting both camelCase and snake_case)
+    if 'sanctionDate' in df.columns and 'sanction_date' not in df.columns:
+        df['sanction_date'] = df['sanctionDate']
+    if 'actualCompletionDate' in df.columns and 'actual_completion_date' not in df.columns:
+        df['actual_completion_date'] = df['actualCompletionDate']
+
+    date_cols = ['recommendation_date', 'sanction_date', 'first_payment_date', 'last_payment_date', 'actual_completion_date', 'sanctionDate', 'actualCompletionDate']
     for c in date_cols:
         if c in df.columns:
             df[c] = pd.to_datetime(df[c], errors='coerce')
@@ -23,16 +28,19 @@ def generate_features(df):
         df['amount_deviation'] = df['sanctioned_amount'] - df['recommended_amount']
         
     # 3. Sanction Delay Days
-    if 'sanction_date' in df.columns and 'recommendation_date' in df.columns:
-        df['sanction_delay_days'] = (df['sanction_date'] - df['recommendation_date']).dt.days
+    sanc_col = 'sanction_date' if 'sanction_date' in df.columns else 'sanctionDate'
+    rec_col = 'recommendation_date'
+    if sanc_col in df.columns and rec_col in df.columns:
+        df['sanction_delay_days'] = (df[sanc_col] - df[rec_col]).dt.days
         
     # 4. Payment Duration Days
     if 'last_payment_date' in df.columns and 'first_payment_date' in df.columns:
         df['payment_duration_days'] = (df['last_payment_date'] - df['first_payment_date']).dt.days
         
     # 5. Completion Duration Days
-    if 'actual_completion_date' in df.columns and 'sanction_date' in df.columns:
-        df['completion_duration_days'] = (df['actual_completion_date'] - df['sanction_date']).dt.days
+    comp_col = 'actual_completion_date' if 'actual_completion_date' in df.columns else 'actualCompletionDate'
+    if comp_col in df.columns and sanc_col in df.columns:
+        df['completion_duration_days'] = (df[comp_col] - df[sanc_col]).dt.days
         
     # 6. Vendor Work Count (approx based on concatenation)
     if 'vendor_name' in df.columns:

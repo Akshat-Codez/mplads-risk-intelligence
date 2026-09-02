@@ -3,7 +3,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import Map, { Marker, Popup, Source, Layer, NavigationControl, MapRef } from 'react-map-gl/maplibre';
 import circle from '@turf/circle';
 import centroid from '@turf/centroid';
-import { StateGISMetrics, DistrictGISMetrics, computeDistrictGISMetrics } from '../../services/gisService';
+import { StateGISMetrics, DistrictGISMetrics, computeDistrictGISMetrics, getRiskCategoryAndColor } from '../../services/gisService';
 import { Project } from '../../types';
 
 export type MapMode = 'NATIONAL_SHADED' | 'STATE_DISTRICT_SHADED' | 'DISTRICT_PROJECTS' | 'STANDARD';
@@ -16,7 +16,6 @@ interface GISMapProps {
   stateMetrics: StateGISMetrics[];
   districtMetrics: DistrictGISMetrics[];
   projects: Project[];
-  pinModeEnabled?: boolean;
   onSelectState: (state: string) => void;
   onSelectDistrict: (district: string) => void;
   onSelectProject: (project: Project) => void;
@@ -84,11 +83,9 @@ const normalizeName = (name: string): string => {
   return cleaned;
 };
 
-// Color threshold helper matching legend (3 tiers)
-const getRiskColor = (score: number): string => {
-  if (score >= 60) return '#EF4444'; // Red (High Risk)
-  if (score >= 30) return '#F59E0B'; // Amber (Moderate Risk)
-  return '#10B981'; // Green (Low Risk)
+// Color threshold helper matching platform risk thresholds
+const getRiskColor = (score: number, level?: string): string => {
+  return getRiskCategoryAndColor(score, level).color;
 };
 
 export const GISMap: React.FC<GISMapProps> = ({
@@ -99,7 +96,6 @@ export const GISMap: React.FC<GISMapProps> = ({
   stateMetrics,
   districtMetrics,
   projects,
-  pinModeEnabled = false,
   onSelectState,
   onSelectDistrict,
   onSelectProject
@@ -289,7 +285,7 @@ export const GISMap: React.FC<GISMapProps> = ({
       if (typeof lat === 'number' && typeof lng === 'number' && !isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0) {
         validProjectPins.push({
           project: p,
-          color: getRiskColor(p.riskScore),
+          color: getRiskColor(p.riskScore ?? p.prototype_risk_score ?? 0, p.riskLevel || p.risk_level),
           lat,
           lng
         });
@@ -306,7 +302,9 @@ export const GISMap: React.FC<GISMapProps> = ({
     const geofenceFeatures: any[] = [];
     validProjectPins.forEach(item => {
       const p = item.project;
-      if (p.riskScore >= 60 && p.photoLatitude && p.photoLongitude && (p.photoLatitude !== p.regLatitude || p.photoLongitude !== p.regLongitude)) {
+      const scoreVal = p.riskScore ?? p.prototype_risk_score ?? 0;
+      const isHighRisk = scoreVal >= 50 || p.riskLevel === 'HIGH' || p.riskLevel === 'CRITICAL';
+      if (isHighRisk && p.photoLatitude && p.photoLongitude && (p.photoLatitude !== p.regLatitude || p.photoLongitude !== p.regLongitude)) {
         try {
           const circlePoly = circle([item.lng, item.lat], 0.1, { units: 'kilometers' });
           geofenceFeatures.push({
@@ -380,21 +378,8 @@ export const GISMap: React.FC<GISMapProps> = ({
     });
   }, [mapMode, viewMode, selectedState, selectedDistrict, stateMetrics, districtMetrics, phase3Data]);
 
-  // Handle map click for Phase 1 State Fill queries & custom pin creation
+  // Handle map click for Phase 1 State Fill queries
   const handleMapClick = (e: any) => {
-    if (pinModeEnabled) {
-      const lng = e.lngLat.lng;
-      const lat = e.lngLat.lat;
-      const label = window.prompt("Enter a label for this custom GIS pin:");
-      if (label && label.trim()) {
-        setCustomPins(prev => [
-          ...prev,
-          { id: crypto.randomUUID(), lat, lng, label: label.trim() }
-        ]);
-      }
-      return;
-    }
-
     if (mapMode === 'NATIONAL_SHADED' && mapRef.current) {
       const map = mapRef.current.getMap();
       const features = map.queryRenderedFeatures(e.point, { layers: ['state-fills'] });
@@ -445,7 +430,7 @@ export const GISMap: React.FC<GISMapProps> = ({
   return (
     <div
       style={{ position: 'relative', width: '100%', height: isMinimized ? '360px' : '620px' }}
-      className={`rounded-2xl overflow-hidden shadow-lg border border-slate-300 font-sans transition-all duration-300 ${pinModeEnabled ? 'cursor-crosshair' : ''}`}
+      className="rounded-2xl overflow-hidden shadow-lg border border-slate-300 font-sans transition-all duration-300"
     >
       <Map
         ref={mapRef}
@@ -702,19 +687,28 @@ export const GISMap: React.FC<GISMapProps> = ({
           >
             {popupInfo.type === 'PROJECT' && (
               <div className="font-sans space-y-2 p-1.5 max-w-xs text-xs bg-white rounded-xl">
-                <div className="flex items-center justify-between border-b pb-1.5">
-                  <span className="font-extrabold text-slate-900 text-xs truncate max-w-[180px]">{popupInfo.data.workTitle}</span>
+                <div className="flex items-center justify-between border-b pb-1.5 gap-2">
+                  <span className="font-extrabold text-slate-900 text-xs truncate max-w-[170px]">{popupInfo.data.workTitle}</span>
                   <span 
-                    className="font-black px-2 py-0.5 rounded text-[10px] text-white uppercase shadow-sm"
-                    style={{ backgroundColor: getRiskColor(popupInfo.data.riskScore) }}
+                    className="font-black px-2 py-0.5 rounded text-[9px] text-white uppercase shadow-sm whitespace-nowrap"
+                    style={{ backgroundColor: getRiskColor(popupInfo.data.riskScore ?? popupInfo.data.prototype_risk_score ?? 0, popupInfo.data.riskLevel || popupInfo.data.risk_level) }}
                   >
-                    SCORE {popupInfo.data.riskScore}/100
+                    {(popupInfo.data.riskScore ?? popupInfo.data.prototype_risk_score ?? 0) >= 80 || popupInfo.data.riskLevel === 'CRITICAL' ? 'CRITICAL REVIEW' :
+                     (popupInfo.data.riskScore ?? popupInfo.data.prototype_risk_score ?? 0) >= 50 || popupInfo.data.riskLevel === 'HIGH' ? 'HIGH RISK' :
+                     (popupInfo.data.riskScore ?? popupInfo.data.prototype_risk_score ?? 0) >= 25 || popupInfo.data.riskLevel === 'MEDIUM' ? 'MEDIUM RISK' : 'LOW RISK'}
                   </span>
                 </div>
                 <div className="space-y-1 text-[11px] text-slate-700">
-                  <p>Vendor: <strong className="text-slate-900">{popupInfo.data.vendorName}</strong></p>
-                  <p>Sanctioned: <strong className="text-slate-900">₹{(popupInfo.data.sanctionedAmount / 100000).toFixed(2)} Lakhs</strong></p>
+                  <p>Risk Score: <strong className="text-slate-900">{popupInfo.data.riskScore ?? popupInfo.data.prototype_risk_score ?? 0}/100</strong> • Priority: <strong className={(popupInfo.data.riskScore ?? popupInfo.data.prototype_risk_score ?? 0) >= 50 || popupInfo.data.riskLevel === 'HIGH' ? 'text-red-600' : 'text-slate-800'}>{(popupInfo.data.riskScore ?? popupInfo.data.prototype_risk_score ?? 0) >= 50 || popupInfo.data.riskLevel === 'HIGH' ? 'Priority Review' : 'Standard Monitoring'}</strong></p>
+                  <p>Vendor: <strong className="text-slate-900">{popupInfo.data.vendorName || 'N/A'}</strong></p>
+                  <p>Sanctioned: <strong className="text-slate-900">₹{((popupInfo.data.sanctionedAmount || popupInfo.data.recommendedAmount || 0) / 100000).toFixed(2)} Lakhs</strong></p>
                   <p>Category: <span className="font-semibold text-slate-600">{popupInfo.data.category}</span></p>
+                  {popupInfo.data.riskEvidenceExplanation && popupInfo.data.riskEvidenceExplanation !== 'No unusual patterns detected.' && (
+                    <div className="bg-amber-50 border border-amber-200 p-2 rounded text-[10px] text-amber-950 mt-1">
+                      <strong className="block text-amber-800 font-bold uppercase tracking-wider text-[9px]">Anomaly Indicators:</strong>
+                      <p className="line-clamp-2 mt-0.5">{popupInfo.data.riskEvidenceExplanation}</p>
+                    </div>
+                  )}
                 </div>
                 <button
                   onClick={() => { setPopupInfo(null); onSelectProject(popupInfo.data); }}
@@ -812,15 +806,15 @@ export const GISMap: React.FC<GISMapProps> = ({
         <div className="flex items-center space-x-4 text-[11px] font-bold">
           <div className="flex items-center space-x-1.5">
             <span className="w-3 h-3 rounded-full bg-red-500 inline-block shadow-sm shadow-red-500/50"></span>
-            <span>High Risk (&ge; 60)</span>
+            <span>Priority Review (&ge; 50)</span>
           </div>
           <div className="flex items-center space-x-1.5">
             <span className="w-3 h-3 rounded-full bg-amber-500 inline-block shadow-sm shadow-amber-500/50"></span>
-            <span>Moderate Watch (30-59)</span>
+            <span>Moderate Watch (25-49)</span>
           </div>
           <div className="flex items-center space-x-1.5">
             <span className="w-3 h-3 rounded-full bg-emerald-500 inline-block shadow-sm shadow-emerald-500/50"></span>
-            <span>Low Risk (&lt; 30)</span>
+            <span>Low Risk (&lt; 25)</span>
           </div>
         </div>
       </div>

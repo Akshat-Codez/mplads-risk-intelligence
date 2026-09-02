@@ -24,6 +24,25 @@ export default function calculateFinancialRisk(project) {
     score = financialRiskScore;
   }
 
+  // Explicit check: distinguish genuine 0 from missing/null values
+  if (project.sanctionedAmount === null || project.sanctionedAmount === undefined) {
+    missingData.push('sanctionedAmount');
+  } else if (project.sanctionedAmount === 0) {
+    dataUsed.push('sanctionedAmount');
+    if (project.workStatus && !project.workStatus.toLowerCase().includes('cancel') && !project.workStatus.toLowerCase().includes('reject')) {
+      score += 10;
+      signals.push({ signal: 'Zero Sanction Anomaly', description: 'Active work registered with ₹0 sanctioned amount', points: 10, evidence: 'Sanction amount = 0' });
+    }
+  } else {
+    dataUsed.push('sanctionedAmount');
+  }
+
+  if (project.totalDisbursed === null || project.totalDisbursed === undefined) {
+    missingData.push('totalDisbursed');
+  } else {
+    dataUsed.push('totalDisbursed');
+  }
+
   if (financialProgress !== undefined && physicalProgress !== undefined) {
     dataUsed.push('financialProgress', 'physicalProgress');
     const mismatch = Math.abs(financialProgress - physicalProgress);

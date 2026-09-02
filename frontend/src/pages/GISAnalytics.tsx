@@ -40,7 +40,6 @@ export const GISAnalytics: React.FC = () => {
   const [selectedState, setSelectedState] = useState(defaultState);
   const [selectedDistrict, setSelectedDistrict] = useState(defaultDistrict);
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
-  const [pinModeEnabled, setPinModeEnabled] = useState(false);
   const [allDistrictsGeoJson, setAllDistrictsGeoJson] = useState<any>(null);
 
   // Sync state if user context resolves asynchronously
@@ -140,7 +139,7 @@ export const GISAnalytics: React.FC = () => {
 
   const handleSelectProject = (project: Project) => {
     setSelectedProject(project);
-    navigate(`/app/projects/${project.id}`);
+    navigate(`/app/projects/${encodeURIComponent(project.projectId || project.id)}`);
   };
 
   return (
@@ -158,14 +157,14 @@ export const GISAnalytics: React.FC = () => {
             </span>
           </div>
           <h1 className="text-3xl font-black text-slate-900 font-serif tracking-tight pt-1">
-            GIS Corruption & Anomaly Heatmap
+            GIS Risk Priority Heatmap
           </h1>
           <p className="text-xs text-slate-500 font-medium">
-            Role-scoped spatial risk intelligence across Indian States & Districts.
+            Role-scoped spatial risk intelligence and anomaly indicators across Indian States & Districts.
           </p>
         </div>
 
-        {/* View Mode Pill Toggle & Add Pin Mode */}
+        {/* View Mode Pill Toggle */}
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex items-center bg-slate-100 p-1.5 rounded-2xl border border-slate-200 text-xs font-extrabold shadow-inner">
             <button
@@ -186,18 +185,6 @@ export const GISAnalytics: React.FC = () => {
               🏢 State & District Map
             </button>
           </div>
-
-          <button
-            onClick={() => setPinModeEnabled(!pinModeEnabled)}
-            className={`px-4 py-2.5 rounded-2xl transition cursor-pointer font-extrabold text-xs flex items-center space-x-2 shadow-sm ${
-              pinModeEnabled ? 'bg-purple-700 text-white ring-2 ring-purple-400' : 'bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200'
-            }`}
-          >
-            <span>📍 Add Pin Mode</span>
-            <span className={`text-[10px] font-black px-1.5 py-0.5 rounded ${pinModeEnabled ? 'bg-white text-purple-900' : 'bg-slate-200 text-slate-800'}`}>
-              {pinModeEnabled ? 'ON' : 'OFF'}
-            </span>
-          </button>
         </div>
       </div>
 
@@ -260,7 +247,6 @@ export const GISAnalytics: React.FC = () => {
         stateMetrics={stateMetrics}
         districtMetrics={districtMetrics}
         projects={filteredProjects}
-        pinModeEnabled={pinModeEnabled}
         onSelectState={handleSelectState}
         onSelectDistrict={handleSelectDistrict}
         onSelectProject={handleSelectProject}

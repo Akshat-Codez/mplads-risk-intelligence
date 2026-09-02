@@ -51,6 +51,8 @@ const ProtectedLayout: React.FC = () => {
             <Route path="geofence-inspector" element={<GeofenceInspector />} />
             <Route path="projects" element={<Projects />} />
             <Route path="projects/:id" element={<ProjectDetail />} />
+            <Route path="projects/:id/audit" element={<ProjectDetail />} />
+            <Route path="projects/:id/inspection" element={<ProjectDetail />} />
             <Route path="risk-intelligence" element={<RoleBasedHome />} />
             <Route path="vendors" element={<Vendors />} />
             <Route path="investigations" element={<Investigations />} />

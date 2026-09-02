@@ -27,14 +27,14 @@ interface NavItem {
 const NAV_BY_ROLE: Record<Role, NavItem[]> = {
   MINISTER: [
     { label: 'Executive Overview', path: '/app/minister', icon: BarChart3 },
-    { label: 'GIS Corruption Map', path: '/app/gis-analytics', icon: MapPin },
+    { label: 'GIS Risk Priority Map', path: '/app/gis-analytics', icon: MapPin },
     { label: 'Geofence Inspector', path: '/app/geofence-inspector', icon: Camera },
     { label: 'MP Projects Explorer', path: '/app/projects', icon: FolderKanban },
     { label: 'National Analytics', path: '/app/analytics', icon: PieChart }
   ],
   MINISTRY: [
     { label: 'National Overview', path: '/app/ministry', icon: BarChart3 },
-    { label: 'GIS Corruption Map', path: '/app/gis-analytics', icon: MapPin },
+    { label: 'GIS Risk Priority Map', path: '/app/gis-analytics', icon: MapPin },
     { label: 'Geofence EXIF Inspector', path: '/app/geofence-inspector', icon: Camera },
     { label: 'Projects Explorer', path: '/app/projects', icon: FolderKanban },
     { label: 'Risk Intelligence', path: '/app/risk-intelligence', icon: ShieldAlert },

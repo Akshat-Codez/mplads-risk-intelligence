@@ -1,21 +1,24 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Search, Filter, Download, RotateCcw } from '../components/common/Icons';
 import { MOCK_PROJECTS } from '../data/mockData';
 import { useAuth } from '../context/AuthContext';
 
 export const Projects: React.FC = () => {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { user, role } = useAuth();
 
   // Role-Enforced Scoping Initial State
   const defaultState = (role === 'STATE' || role === 'DISTRICT') ? (user?.state || 'ALL') : 'ALL';
   const defaultDistrict = role === 'DISTRICT' ? (user?.district || 'ALL') : 'ALL';
+  const defaultVendor = searchParams.get('vendor') || 'ALL';
 
   // Filter States
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedState, setSelectedState] = useState(defaultState);
   const [selectedDistrict, setSelectedDistrict] = useState(defaultDistrict);
+  const [selectedVendor, setSelectedVendor] = useState(defaultVendor);
   const [selectedRisk, setSelectedRisk] = useState('ALL');
   const [selectedCategory, setSelectedCategory] = useState('ALL');
 
@@ -35,12 +38,22 @@ export const Projects: React.FC = () => {
   // Reset pagination on filter change
   useEffect(() => {
     setPage(1);
-  }, [searchTerm, selectedState, selectedDistrict, selectedRisk, selectedCategory]);
+  }, [searchTerm, selectedState, selectedDistrict, selectedVendor, selectedRisk, selectedCategory]);
 
   // Extract unique States dynamically
   const uniqueStates = useMemo(() => {
     const states = Array.from(new Set(MOCK_PROJECTS.map(p => p.state).filter(Boolean))).sort();
     return ['ALL', ...states];
+  }, []);
+
+  // Extract unique Vendors dynamically
+  const uniqueVendors = useMemo(() => {
+    const vendors = Array.from(new Set(
+      MOCK_PROJECTS
+        .map(p => p.vendorName)
+        .filter(v => v && typeof v === 'string' && v.trim() && v.trim() !== 'Unknown Vendor' && v.trim() !== 'N/A')
+    )).sort();
+    return ['ALL', ...vendors];
   }, []);
 
   // Extract unique Districts based on selected State
@@ -57,16 +70,16 @@ export const Projects: React.FC = () => {
       // 1. Text Search Across Title, ID, MP, Vendor
       const search = searchTerm.toLowerCase().trim();
       const matchesSearch = !search || 
-        p.workTitle.toLowerCase().includes(search) || 
-        p.projectId.toLowerCase().includes(search) ||
-        p.vendorName.toLowerCase().includes(search) ||
-        p.district.toLowerCase().includes(search);
+        (p.workTitle && p.workTitle.toLowerCase().includes(search)) || 
+        (p.projectId && p.projectId.toLowerCase().includes(search)) ||
+        (p.vendorName && p.vendorName.toLowerCase().includes(search)) ||
+        (p.district && p.district.toLowerCase().includes(search));
 
       // 2. Strict Role-Enforced Jurisdiction Scoping
       let matchesState = true;
       if (role === 'STATE' || role === 'DISTRICT') {
         const userState = (user?.state || 'Karnataka').toUpperCase();
-        matchesState = p.state.toUpperCase().includes(userState) || userState.includes(p.state.toUpperCase());
+        matchesState = (p.state && p.state.toUpperCase().includes(userState)) || (userState && userState.includes((p.state || '').toUpperCase()));
       } else if (selectedState !== 'ALL') {
         matchesState = p.state === selectedState;
       }
@@ -74,20 +87,26 @@ export const Projects: React.FC = () => {
       let matchesDistrict = true;
       if (role === 'DISTRICT') {
         const userDist = (user?.district || 'BENGALURU URBAN').toUpperCase();
-        matchesDistrict = p.district.toUpperCase().includes(userDist) || userDist.includes(p.district.toUpperCase());
+        matchesDistrict = (p.district && p.district.toUpperCase().includes(userDist)) || (userDist && userDist.includes((p.district || '').toUpperCase()));
       } else if (selectedDistrict !== 'ALL') {
         matchesDistrict = p.district === selectedDistrict;
       }
 
-      // 3. Risk Level Filter
+      // 3. Vendor / Contractor Filter
+      let matchesVendor = true;
+      if (selectedVendor !== 'ALL') {
+        matchesVendor = Boolean(p.vendorName && p.vendorName.toLowerCase().trim() === selectedVendor.toLowerCase().trim());
+      }
+
+      // 4. Risk Level Filter
       const matchesRisk = selectedRisk === 'ALL' || p.riskLevel === selectedRisk;
 
-      // 4. Category Filter
+      // 5. Category Filter
       const matchesCategory = selectedCategory === 'ALL' || p.category === selectedCategory;
 
-      return matchesSearch && matchesState && matchesDistrict && matchesRisk && matchesCategory;
+      return matchesSearch && matchesState && matchesDistrict && matchesVendor && matchesRisk && matchesCategory;
     });
-  }, [searchTerm, selectedState, selectedDistrict, selectedRisk, selectedCategory, role, user]);
+  }, [searchTerm, selectedState, selectedDistrict, selectedVendor, selectedRisk, selectedCategory, role, user]);
 
   // Sort by risk score descending
   const sortedProjects = useMemo(() => {
@@ -103,6 +122,7 @@ export const Projects: React.FC = () => {
 
   const handleResetFilters = () => {
     setSearchTerm('');
+    setSelectedVendor('ALL');
     if (role === 'MINISTRY' || role === 'MINISTER') {
       setSelectedState('ALL');
       setSelectedDistrict('ALL');
@@ -183,7 +203,7 @@ export const Projects: React.FC = () => {
           </button>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-xs font-medium">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 text-xs font-medium">
           
           {/* Search */}
           <div>
@@ -229,6 +249,21 @@ export const Projects: React.FC = () => {
             >
               {uniqueDistricts.map(dst => (
                 <option key={dst} value={dst}>{dst === 'ALL' ? `📍 All Districts in ${selectedState}` : `District: ${dst}`}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Vendor Selector */}
+          <div>
+            <label className="block text-[11px] font-bold text-slate-700 mb-1">Contractor / Vendor</label>
+            <select
+              value={selectedVendor}
+              onChange={(e) => setSelectedVendor(e.target.value)}
+              className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-slate-800 font-bold truncate"
+            >
+              <option value="ALL">🏢 All Vendors</option>
+              {uniqueVendors.filter(v => v !== 'ALL').slice(0, 150).map(vnd => (
+                <option key={vnd} value={vnd}>{vnd}</option>
               ))}
             </select>
           </div>

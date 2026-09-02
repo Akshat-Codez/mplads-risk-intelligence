@@ -28,40 +28,32 @@ const NAV_BY_ROLE: Record<Role, NavItem[]> = {
   MINISTER: [
     { label: 'Executive Overview', path: '/app/minister', icon: BarChart3 },
     { label: 'GIS Risk Priority Map', path: '/app/gis-analytics', icon: MapPin },
-    { label: 'Geofence Inspector', path: '/app/geofence-inspector', icon: Camera },
     { label: 'MP Projects Explorer', path: '/app/projects', icon: FolderKanban },
     { label: 'National Analytics', path: '/app/analytics', icon: PieChart }
   ],
   MINISTRY: [
     { label: 'National Overview', path: '/app/ministry', icon: BarChart3 },
-    { label: 'GIS Risk Priority Map', path: '/app/gis-analytics', icon: MapPin },
-    { label: 'Geofence EXIF Inspector', path: '/app/geofence-inspector', icon: Camera },
     { label: 'Projects Explorer', path: '/app/projects', icon: FolderKanban },
-    { label: 'Risk Intelligence', path: '/app/risk-intelligence', icon: ShieldAlert },
+    { label: 'GIS Priority Map', path: '/app/gis-analytics', icon: MapPin },
     { label: 'Vendors & Cartels', path: '/app/vendors', icon: Building2 },
-    { label: 'Investigations', path: '/app/investigations', icon: Briefcase },
-    { label: 'Notifications', path: '/app/notifications', icon: Bell },
-    { label: 'Analytics', path: '/app/analytics', icon: PieChart },
-    { label: 'Audit Trail', path: '/app/audit-trail', icon: History },
-    { label: 'Data Ingestion & Quality', path: '/app/data-ingestion', icon: Database }
+    { label: 'Investigations & Audits', path: '/app/investigations', icon: Briefcase },
+    { label: 'Analytics & Reports', path: '/app/analytics', icon: PieChart },
+    { label: 'Audit Trail', path: '/app/audit-trail', icon: History }
   ],
   STATE: [
     { label: 'State Overview', path: '/app/state', icon: BarChart3 },
     { label: 'State GIS Map', path: '/app/gis-analytics', icon: MapPin },
-    { label: 'Geofence Inspector', path: '/app/geofence-inspector', icon: Camera },
     { label: 'District Projects', path: '/app/projects', icon: FolderKanban },
+    { label: 'Vendor Concentration', path: '/app/vendors', icon: Building2 },
     { label: 'Escalated Cases', path: '/app/investigations', icon: Briefcase },
-    { label: 'Vendor Cartels', path: '/app/vendors', icon: Building2 },
     { label: 'State Analytics', path: '/app/analytics', icon: PieChart },
     { label: 'Audit Trail', path: '/app/audit-trail', icon: History }
   ],
   DISTRICT: [
     { label: 'District Action Hub', path: '/app/district', icon: BarChart3 },
     { label: 'District GIS Map', path: '/app/gis-analytics', icon: MapPin },
-    { label: 'Geofence EXIF Inspector', path: '/app/geofence-inspector', icon: Camera },
     { label: 'Local Works Queue', path: '/app/projects', icon: FolderKanban },
-    { label: 'Field Audits', path: '/app/investigations', icon: Briefcase },
-    { label: 'Notifications', path: '/app/notifications', icon: Bell }
+    { label: 'Field Audits & Inspections', path: '/app/investigations', icon: Briefcase }
   ]
 };
 

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { StateEmblem } from '../components/common/StateEmblem';
-import { UserCheck, KeyRound } from '../components/common/Icons';
+import { UserCheck, KeyRound, RotateCcw } from '../components/common/Icons';
 import { useAuth } from '../context/AuthContext';
 import { Role } from '../types';
 import { MOCK_PROJECTS } from '../data/mockData';
@@ -34,8 +34,18 @@ export const Login: React.FC = () => {
   const defaultLocations = extractLocations(MOCK_PROJECTS);
   const defaultStates = Object.keys(defaultLocations).sort();
 
+  const generateCaptcha = () => {
+    const chars = '23456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz';
+    let res = '';
+    for (let i = 0; i < 5; i++) {
+      res += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return res;
+  };
+
   const [username, setUsername] = useState('GOV-MOSPI-001');
   const [password, setPassword] = useState('••••••••••••');
+  const [captchaCode, setCaptchaCode] = useState<string>(generateCaptcha);
   const [captchaInput, setCaptchaInput] = useState('');
   const [selectedRole, setSelectedRole] = useState<Role>(initialRole);
   const [locations, setLocations] = useState<Record<string, string[]>>(defaultLocations);
@@ -43,9 +53,15 @@ export const Login: React.FC = () => {
   const [selectedDistrict, setSelectedDistrict] = useState(defaultLocations[defaultStates[0]]?.[0] || '');
   
   const [error, setError] = useState<string | null>(null);
+  const [showForgotPassword, setShowForgotPassword] = useState<boolean>(false);
   
   const { login } = useAuth();
   const navigate = useNavigate();
+
+  const refreshCaptcha = () => {
+    setCaptchaCode(generateCaptcha());
+    setCaptchaInput('');
+  };
 
   React.useEffect(() => {
     // Fetch dynamic locations from authoritative backend API
@@ -83,6 +99,18 @@ export const Login: React.FC = () => {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+
+    // Validate CAPTCHA
+    if (!captchaInput.trim()) {
+      setError('Please enter the security CAPTCHA code.');
+      return;
+    }
+    if (captchaInput.trim().toLowerCase() !== captchaCode.toLowerCase()) {
+      setError('Invalid CAPTCHA code. Please enter the characters shown in the security box.');
+      refreshCaptcha();
+      return;
+    }
+
     try {
       await login(
         username,
@@ -93,25 +121,7 @@ export const Login: React.FC = () => {
       navigate('/app');
     } catch (err: any) {
       setError(err.message || 'Login failed. Please check credentials.');
-    }
-  };
-
-  const handleDemoMode = async (demoRole: Role, demoState?: string, demoDistrict?: string) => {
-    setError(null);
-    const effectiveState = demoState || selectedState || 'Uttar Pradesh';
-    const distList = locations[effectiveState] || [];
-    const effectiveDistrict = demoDistrict || selectedDistrict || distList[0] || 'Varanasi';
-
-    try {
-      await login(
-        `DEMO-${demoRole}-2026`,
-        demoRole,
-        demoRole === 'MINISTRY' || demoRole === 'MINISTER' ? 'All India' : effectiveState,
-        demoRole === 'DISTRICT' ? effectiveDistrict : 'All Districts'
-      );
-      navigate('/app');
-    } catch (err: any) {
-      setError('Demo login failed. Make sure server is running.');
+      refreshCaptcha();
     }
   };
 
@@ -246,59 +256,83 @@ export const Login: React.FC = () => {
                 <KeyRound className="absolute left-3 top-3 text-slate-400" size={16} />
               </div>
               <div className="text-right mt-1">
-                <a href="#forgot" onClick={(e) => { e.preventDefault(); alert('Password reset link sent to official registered @gov.in email inbox.'); }} className="text-[11px] text-blue-600 hover:underline font-semibold">
+                <button 
+                  type="button"
+                  onClick={() => setShowForgotPassword(true)} 
+                  className="text-[11px] text-blue-600 hover:underline font-semibold cursor-pointer"
+                >
                   Forgot Password?
-                </a>
+                </button>
               </div>
             </div>
+
+            {/* Forgot Password Notice Modal / Alert */}
+            {showForgotPassword && (
+              <div className="p-3.5 bg-blue-50 border border-blue-200 rounded-xl space-y-2 text-xs">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="space-y-1">
+                    <p className="font-bold text-blue-950">Administrative Password Reset Notice</p>
+                    <p className="text-blue-800 text-[11px] leading-relaxed">
+                      Password reset is currently handled by the system administrator for government security compliance. Please contact your designated MoSPI administrator or State Nodal Officer to verify your authority identity and reset your credentials.
+                    </p>
+                  </div>
+                  <button 
+                    type="button" 
+                    onClick={() => setShowForgotPassword(false)}
+                    className="text-blue-900 font-bold hover:text-blue-700 px-1 cursor-pointer"
+                  >
+                    ✕
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* Captcha Security Box */}
-            <div className="flex items-center space-x-3 bg-slate-50 p-2.5 rounded-lg border border-slate-300">
-              <div className="bg-slate-800 text-amber-300 font-mono text-sm px-3 py-1.5 rounded font-extrabold tracking-widest select-none">
-                kg2ry
+            <div className="space-y-1.5">
+              <label className="block font-bold text-slate-700">Security Verification <span className="text-red-500">*</span></label>
+              <div className="flex items-center space-x-2 bg-slate-100 p-2 rounded-lg border border-slate-300">
+                <div className="relative bg-slate-900 text-amber-300 font-mono text-base px-3.5 py-1.5 rounded font-black tracking-widest select-none shadow-inner border border-slate-700 flex items-center justify-center">
+                  <span className="line-through decoration-amber-500/70 tracking-widest">{captchaCode}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={refreshCaptcha}
+                  className="p-2 text-slate-600 hover:text-blue-700 hover:bg-slate-200 rounded-lg transition cursor-pointer"
+                  title="Generate new CAPTCHA"
+                >
+                  <RotateCcw size={16} />
+                </button>
+                <input
+                  type="text"
+                  value={captchaInput}
+                  onChange={(e) => setCaptchaInput(e.target.value)}
+                  placeholder="Type CAPTCHA"
+                  className="flex-1 bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs font-mono font-bold text-slate-900 focus:ring-2 focus:ring-blue-600 uppercase"
+                  required
+                />
               </div>
-              <input
-                type="text"
-                value={captchaInput}
-                onChange={(e) => setCaptchaInput(e.target.value)}
-                placeholder="Captcha"
-                className="flex-1 bg-white border border-slate-300 rounded px-2.5 py-1.5 text-xs text-slate-900 font-mono"
-              />
             </div>
 
+            {/* Access Authority Dashboard Primary Button */}
             <button
               type="submit"
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg shadow transition text-sm cursor-pointer"
+              className="w-full bg-[#E65100] hover:bg-[#c64500] text-white font-bold py-3.5 rounded-xl shadow-lg transition text-sm cursor-pointer uppercase tracking-wider flex items-center justify-center space-x-2"
             >
-              Login as {selectedRole === 'DISTRICT' ? `${selectedDistrict} DC` : selectedRole === 'STATE' ? `${selectedState} Nodal` : 'National Authority'}
+              <span>Access Authority Dashboard</span>
             </button>
-
-            <p className="text-[10px] text-red-500 text-center font-medium">
-              If the OTP is not received via SMS, please check your registered email inbox for the OTP.
+            <p className="text-[11px] text-center text-slate-500 font-medium">
+              Signing in as: <strong>{selectedRole === 'DISTRICT' ? `${selectedDistrict} District Collector` : selectedRole === 'STATE' ? `${selectedState} State Nodal Authority` : selectedRole === 'MINISTER' ? "Hon'ble Minister" : 'Ministry MoSPI Operations'}</strong>
             </p>
           </form>
 
-          {/* Quick Demo Logins for Hackathon */}
-          <div className="pt-3 border-t border-slate-200 space-y-2 text-center">
-            <span className="text-[10px] text-slate-400 font-bold uppercase">Hackathon Quick Demo Logins:</span>
-            <div className="grid grid-cols-2 gap-2 text-[11px]">
-              <button onClick={() => handleDemoMode('MINISTRY')} className="p-1.5 bg-blue-50 hover:bg-blue-100 text-blue-900 font-bold rounded border border-blue-200">
-                🏛️ MoSPI National (All India)
-              </button>
-              <button onClick={() => handleDemoMode('STATE', 'Karnataka')} className="p-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-900 font-bold rounded border border-emerald-200">
-                🏢 State Nodal (Karnataka)
-              </button>
-              <button onClick={() => handleDemoMode('DISTRICT', 'Bihar', 'PURBI CHAMPARAN')} className="p-1.5 bg-purple-50 hover:bg-purple-100 text-purple-900 font-bold rounded border border-purple-200">
-                📍 DC Purbi Champaran
-              </button>
-              <button onClick={() => handleDemoMode('STATE', 'Uttar Pradesh')} className="p-1.5 bg-amber-50 hover:bg-amber-100 text-amber-900 font-bold rounded border border-amber-200">
-                🏢 State Nodal (Uttar Pradesh)
-              </button>
+          {/* Clean Support Information */}
+          <div className="pt-4 border-t border-slate-200 text-center space-y-1">
+            <p className="text-[11px] text-slate-500">
+              For authority credentials or nodal onboarding assistance, contact the <strong>MoSPI NIRMAN Support Desk</strong>.
+            </p>
+            <div className="text-[10px] text-slate-400">
+              Copyright © 2026 Ministry of Statistics and Programme Implementation, Government of India.
             </div>
-          </div>
-
-          <div className="text-center pt-2 text-[10px] text-slate-400">
-            Copyright © 2026 Ministry of Statistics and Programme Implementation. All Rights Reserved.
           </div>
         </div>
 

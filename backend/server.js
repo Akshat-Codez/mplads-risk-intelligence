@@ -13,6 +13,7 @@ import contractorRoutes from './routes/contractors.js';
 import aiSummaryRoutes from './routes/aiSummary.js';
 import feedbackRoutes from './routes/feedback.js';
 import modelRoutes from './routes/models.js';
+import adminRoutes from './routes/admin.js';
 import authMiddleware from './middleware/auth.js';
 
 dotenv.config();
@@ -33,6 +34,7 @@ app.use('/api/contractors', contractorRoutes);
 app.use('/api/ai', aiSummaryRoutes);
 app.use('/api/feedback', feedbackRoutes);
 app.use('/api/models', modelRoutes);
+app.use('/api/admin', adminRoutes);
 app.use('/api', feedbackRoutes); // for /api/projects/:projectId/feedback
 
 

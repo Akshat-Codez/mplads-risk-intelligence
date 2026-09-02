@@ -35,7 +35,7 @@ export const ProjectDetail: React.FC = () => {
     const hasSpent = Boolean((project.totalDisbursed && project.totalDisbursed > 0) || (project.paymentCount && project.paymentCount > 0));
     const statusStr = (project.workStatus || project.status || '').toLowerCase();
     const isCompleted = statusStr.includes('completed') || Boolean(project.actualCompletionDate);
-    const isInspected = statusStr.includes('inspection') || isCompleted;
+    const isInspected = statusStr.includes('physical inspection completed') || statusStr.includes('inspection passed') || project.inspection_status === 'INSPECTED';
 
     return {
       aa: Boolean(project.recommendationDate || project.recommendedAmount || project.sanctionDate),
@@ -122,7 +122,14 @@ export const ProjectDetail: React.FC = () => {
         try {
           const aiRes = await api.get(`/ai/project/${encodedId}/summary`);
           setAiProjectSummary(aiRes.data);
-        } catch (aiErr) {}
+        } catch (aiErr: any) {
+          console.warn("AI service currently unavailable, using deterministic fallback:", aiErr.message);
+          setAiProjectSummary({
+            summaryMarkdown: `### 1. Executive Intelligence Notice\nThis project has been flagged for further administrative verification through multi-signal deterministic evaluation.\n\n### 2. Contributing Risk Factors\n${data?.risk_evidence_explanation || 'Deterministic review complete. Standard verification parameters apply.'}\n\n### 3. Recommended Verification Actions\n1. Verify physical site execution milestones before releasing subsequent installment tranches.\n2. Confirm contractor credentials and GSTIN compliance.\n3. Validate Measurement Book (MB) recordings against original technical sanctions.`,
+            isLlmGenerated: false,
+            isUnavailable: true
+          });
+        }
 
         // Fetch Verification Feedback History
         await fetchFeedbackHistory();
@@ -352,29 +359,95 @@ export const ProjectDetail: React.FC = () => {
           </div>
         </div>
 
-        {/* Project Attribute Cards Grid */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs pt-2 border-t border-slate-100">
+        {/* Project Attribute Cards Grid (Complete 15-Field Intelligence Dossier) */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs pt-3 border-t border-slate-100">
           <div>
-            <span className="text-slate-400 font-medium">District & State</span>
-            <p className="font-semibold text-slate-800">{project.district}, {project.state}</p>
+            <span className="text-slate-400 font-medium">Work ID</span>
+            <p className="font-bold text-slate-900 font-mono">{project.work_id || project.projectId || id}</p>
           </div>
           <div>
-            <span className="text-slate-400 font-medium">Work Category</span>
-            <p className="font-semibold text-slate-800">{project.work_type}</p>
+            <span className="text-slate-400 font-medium">State & District</span>
+            <p className="font-semibold text-slate-800">{project.district || 'N/A'}, {project.state || 'N/A'}</p>
           </div>
           <div>
-            <span className="text-slate-400 font-medium">MP Name</span>
-            <p className="font-semibold text-slate-800">{project.mp_name}</p>
+            <span className="text-slate-400 font-medium">MP Name & Constituency</span>
+            <p className="font-semibold text-slate-800">{project.mp_name || project.mpName || 'Data unavailable'} {project.constituency ? `(${project.constituency})` : ''}</p>
+          </div>
+          <div>
+            <span className="text-slate-400 font-medium">Execution Status</span>
+            <p className="font-semibold text-slate-800">{project.work_status || project.workStatus || project.status || 'In Progress'}</p>
           </div>
           <div>
             <span className="text-slate-400 font-medium">Sanctioned Amount</span>
-            <p className="font-semibold text-slate-800">
-              {project.sanctioned_amount && project.sanctioned_amount > 0 
-                ? `₹${project.sanctioned_amount.toLocaleString()}` 
-                : project.recommended_amount && project.recommended_amount > 0 
-                ? `₹${project.recommended_amount.toLocaleString()} (Rec. — Pending Sanction)` 
-                : 'Not Available'}
+            <p className="font-bold text-slate-900">
+              {project.sanctioned_amount !== null && project.sanctioned_amount !== undefined && project.sanctioned_amount > 0 
+                ? `₹${Number(project.sanctioned_amount).toLocaleString('en-IN')}` 
+                : project.recommended_amount !== null && project.recommended_amount !== undefined && project.recommended_amount > 0 
+                ? `₹${Number(project.recommended_amount).toLocaleString('en-IN')} (Recommended)` 
+                : project.sanctioned_amount === 0
+                ? '₹0'
+                : 'Data unavailable'}
             </p>
+          </div>
+          <div>
+            <span className="text-slate-400 font-medium">Actual Expenditure</span>
+            <p className="font-bold text-slate-900">
+              {project.actual_expenditure !== null && project.actual_expenditure !== undefined && project.actual_expenditure > 0
+                ? `₹${Number(project.actual_expenditure).toLocaleString('en-IN')}`
+                : project.total_disbursed !== null && project.total_disbursed !== undefined && project.total_disbursed > 0
+                ? `₹${Number(project.total_disbursed).toLocaleString('en-IN')}`
+                : project.actual_expenditure === 0 || project.total_disbursed === 0
+                ? '₹0 (Unspent)'
+                : 'Data unavailable'}
+            </p>
+          </div>
+          <div>
+            <span className="text-slate-400 font-medium">Physical Inspection Status</span>
+            <p className="mt-0.5">
+              <span className={`text-[10px] font-black px-2 py-0.5 rounded-full uppercase ${
+                project.inspection_status === 'INSPECTED' || effectiveChecklist.inspection
+                  ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                  : 'bg-slate-100 text-slate-700 border border-slate-300'
+              }`}>
+                {project.inspection_status === 'INSPECTED' || effectiveChecklist.inspection ? 'INSPECTED / VERIFIED' : 'NOT INSPECTED'}
+              </span>
+            </p>
+          </div>
+          <div>
+            <span className="text-slate-400 font-medium">Audit Record Status</span>
+            <p className="mt-0.5">
+              <span className={`text-[10px] font-black px-2 py-0.5 rounded-full uppercase ${
+                (project.audit_cases && project.audit_cases.length > 0) || project.investigation_status === 'Under Audit'
+                  ? 'bg-purple-100 text-purple-800 border border-purple-300'
+                  : 'bg-amber-50 text-amber-800 border border-amber-200'
+              }`}>
+                {(project.audit_cases && project.audit_cases.length > 0) || project.investigation_status === 'Under Audit' ? 'UNDER AUDIT' : 'NO AUDIT RECORD YET'}
+              </span>
+            </p>
+          </div>
+        </div>
+
+        {/* 4 Core Risk Intelligence Cards */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-3 border-t border-slate-100">
+          <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
+            <span className="text-[10px] text-slate-500 font-bold uppercase block">Financial Risk</span>
+            <strong className="text-sm font-extrabold text-slate-900">{project.financial_risk_score ?? project.financialRiskScore ?? 0}/100</strong>
+            <span className="text-[10px] text-slate-500 block font-medium">Level: {project.financial_risk_level ?? project.financialRiskLevel ?? 'LOW'}</span>
+          </div>
+          <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
+            <span className="text-[10px] text-slate-500 font-bold uppercase block">Procurement Risk</span>
+            <strong className="text-sm font-extrabold text-slate-900">{project.procurement_risk_score ?? project.procurementRiskScore ?? 0}/100</strong>
+            <span className="text-[10px] text-slate-500 block font-medium">Level: {project.procurement_risk_level ?? project.procurementRiskLevel ?? 'LOW'}</span>
+          </div>
+          <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
+            <span className="text-[10px] text-slate-500 font-bold uppercase block">Contractor Risk</span>
+            <strong className="text-sm font-extrabold text-slate-900">{project.contractor_risk_score ?? project.contractorRiskScore ?? 0}/100</strong>
+            <span className="text-[10px] text-slate-500 block font-medium truncate">{project.vendorName || 'No Vendor Assigned'}</span>
+          </div>
+          <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
+            <span className="text-[10px] text-slate-500 font-bold uppercase block">Evidence Coverage</span>
+            <strong className="text-sm font-extrabold text-indigo-900">{project.data_completeness ?? effectiveCompleteness ?? 0}%</strong>
+            <span className="text-[10px] text-indigo-700 block font-medium">{effectiveCompleteness >= 70 ? 'High Evidence' : 'Data Gaps Present'}</span>
           </div>
         </div>
       </div>
@@ -390,8 +463,12 @@ export const ProjectDetail: React.FC = () => {
                 <p className="text-[11px] text-indigo-200/80">Cross-verified structured intelligence for administrative review</p>
               </div>
             </div>
-            <span className="text-[10px] bg-indigo-500/30 text-indigo-300 border border-indigo-400/30 px-2.5 py-0.5 rounded-full font-bold uppercase">
-              Cross-Verified Evidence
+            <span className={`text-[10px] px-2.5 py-0.5 rounded-full font-bold uppercase border ${
+              aiProjectSummary.isUnavailable 
+                ? 'bg-amber-500/20 text-amber-300 border-amber-400/30' 
+                : 'bg-indigo-500/30 text-indigo-300 border-indigo-400/30'
+            }`}>
+              {aiProjectSummary.isUnavailable ? 'Deterministic Rule-Based Briefing' : 'AI Officer Multi-Signal Briefing'}
             </span>
           </div>
 

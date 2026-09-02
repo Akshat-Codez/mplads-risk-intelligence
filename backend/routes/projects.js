@@ -108,7 +108,7 @@ function mapProjectToFrontend(project) {
     const hasSpent = Boolean((p.totalDisbursed && p.totalDisbursed > 0) || (p.paymentCount && p.paymentCount > 0));
     const statusStr = (p.workStatus || '').toLowerCase();
     const isCompleted = statusStr.includes('completed') || Boolean(p.actualCompletionDate);
-    const isInspected = statusStr.includes('inspection') || isCompleted;
+    const isInspected = statusStr.includes('physical inspection completed') || statusStr.includes('inspection passed') || Boolean(p.inspectionStatus === 'INSPECTED');
 
     p.documents_checklist = {
       aa: Boolean(p.recommendationDate || p.recommendedAmount || p.sanctionDate),
@@ -128,6 +128,7 @@ function mapProjectToFrontend(project) {
 
   const docCount = Object.values(p.documents_checklist).filter(Boolean).length;
   p.document_completeness = p.documentCompleteness || Math.round((docCount / 12) * 100);
+  p.inspection_status = p.documents_checklist?.inspection ? 'INSPECTED' : 'NOT INSPECTED';
 
   return p;
 }

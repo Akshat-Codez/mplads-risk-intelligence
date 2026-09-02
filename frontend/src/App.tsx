@@ -16,9 +16,13 @@ import { Vendors } from './pages/vendors/Vendors';
 import { Investigations } from './pages/investigations/Investigations';
 import { Analytics } from './pages/Analytics';
 import { AuditTrail } from './pages/AuditTrail';
-import { DataIngestion } from './pages/DataIngestion';
 import { GISAnalytics } from './pages/GISAnalytics';
 import { GeofenceInspector } from './pages/GeofenceInspector';
+import { AdminPanel } from './pages/admin/AdminPanel';
+import { About } from './pages/public/About';
+import { Guidelines } from './pages/public/Guidelines';
+import { Help } from './pages/public/Help';
+import { Contact } from './pages/public/Contact';
 
 const RoleBasedHome: React.FC = () => {
   const { role } = useAuth();
@@ -73,10 +77,16 @@ export const App: React.FC = () => {
     <AuthProvider>
       <Router>
         <Routes>
-          {/* Public Landing Page */}
+          {/* Public Landing & Information Pages */}
           <Route path="/" element={<Home />} />
+          <Route path="/about" element={<About />} />
+          <Route path="/guidelines" element={<Guidelines />} />
+          <Route path="/help" element={<Help />} />
+          <Route path="/contact" element={<Contact />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
+          {/* Hidden Protected Admin Panel */}
+          <Route path="/admin" element={<AdminPanel />} />
           {/* Protected Application Routes */}
           <Route path="/app/*" element={<ProtectedLayout />} />
           <Route path="/dashboard/*" element={<ProtectedLayout />} />

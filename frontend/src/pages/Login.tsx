@@ -4,19 +4,43 @@ import { StateEmblem } from '../components/common/StateEmblem';
 import { UserCheck, KeyRound } from '../components/common/Icons';
 import { useAuth } from '../context/AuthContext';
 import { Role } from '../types';
+import { MOCK_PROJECTS } from '../data/mockData';
 import api from '../services/api';
+
+function extractLocations(projects: any[]): Record<string, string[]> {
+  const map: Record<string, string[]> = {};
+  for (const p of projects) {
+    if (!p.state) continue;
+    const st = p.state.trim();
+    if (!st || st === 'UNKNOWN') continue;
+    if (!map[st]) map[st] = [];
+    if (p.district) {
+      const dt = p.district.trim();
+      if (dt && dt !== 'UNKNOWN' && !map[st].includes(dt)) {
+        map[st].push(dt);
+      }
+    }
+  }
+  for (const st of Object.keys(map)) {
+    map[st].sort();
+  }
+  return map;
+}
 
 export const Login: React.FC = () => {
   const [searchParams] = useSearchParams();
   const initialRole = (searchParams.get('role') as Role) || 'MINISTRY';
 
+  const defaultLocations = extractLocations(MOCK_PROJECTS);
+  const defaultStates = Object.keys(defaultLocations).sort();
+
   const [username, setUsername] = useState('GOV-MOSPI-001');
   const [password, setPassword] = useState('••••••••••••');
   const [captchaInput, setCaptchaInput] = useState('');
   const [selectedRole, setSelectedRole] = useState<Role>(initialRole);
-  const [selectedState, setSelectedState] = useState('');
-  const [selectedDistrict, setSelectedDistrict] = useState('');
-  const [locations, setLocations] = useState<Record<string, string[]>>({});
+  const [locations, setLocations] = useState<Record<string, string[]>>(defaultLocations);
+  const [selectedState, setSelectedState] = useState(defaultStates[0] || 'Andhra Pradesh');
+  const [selectedDistrict, setSelectedDistrict] = useState(defaultLocations[defaultStates[0]]?.[0] || '');
   
   const [error, setError] = useState<string | null>(null);
   
@@ -33,12 +57,11 @@ export const Login: React.FC = () => {
           setLocations(locs);
           const states = Object.keys(locs).sort();
           if (states.length > 0) {
-            const firstState = states[0];
-            setSelectedState(firstState);
-            const firstDistricts = locs[firstState] || [];
-            if (firstDistricts.length > 0) {
-              setSelectedDistrict(firstDistricts[0]);
-            }
+            setSelectedState(prev => (locs[prev] ? prev : states[0]));
+            setSelectedDistrict(prev => {
+              const curDistricts = locs[selectedState] || locs[states[0]] || [];
+              return curDistricts.includes(prev) ? prev : (curDistricts[0] || '');
+            });
           }
         }
       })

@@ -70,7 +70,13 @@ export function aggregateRisk(project, allProjects, contractorProfile) {
     }
   }
 
-  overallScore = Math.min(100, Math.round(overallScore));
+  // Preserve ML baseline score (e.g. Isolation Forest & peer deviation) so scores remain consistent
+  const baselineMLScore = parseFloat(project.prototype_risk_score ?? project.riskScore ?? project.financialRiskScore ?? 0);
+  if (baselineMLScore > 0) {
+    overallScore = Math.max(overallScore, baselineMLScore);
+  }
+
+  overallScore = Math.min(100, Math.round(overallScore * 10) / 10);
 
   const { confidence, dataCompleteness } = calculateConfidence(project, engineAvailability);
 

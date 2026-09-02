@@ -28,6 +28,23 @@ STATE_NORMALIZE = {
     'kerala': 'Kerala',
     'nagaland': 'Nagaland',
     'maharashtra': 'Maharashtra',
+    'andhra pradesh': 'Andhra Pradesh',
+    'chandigarh': 'Chandigarh',
+    'goa': 'Goa',
+    'haryana': 'Haryana',
+    'jammu and kashmir': 'Jammu and Kashmir',
+    'puducherry': 'Puducherry',
+    'punjab': 'Punjab',
+    'tamil nadu': 'Tamil Nadu',
+    'telangana': 'Telangana',
+    'telengana': 'Telangana',
+    'assam': 'Assam',
+    'manipur': 'Manipur',
+    'odisha': 'Odisha',
+    'sikkim': 'Sikkim',
+    'tripura': 'Tripura',
+    'west bengal': 'West Bengal',
+    'wb': 'West Bengal'
 }
 
 def normalize_state(val):

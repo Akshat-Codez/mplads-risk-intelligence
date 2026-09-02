@@ -20,19 +20,22 @@ export const Dashboard: React.FC = () => {
     const totalWorks = MOCK_PROJECTS.length;
     const totalSanctioned = MOCK_PROJECTS.reduce((acc, p) => acc + (p.sanctionedAmount || 0), 0) / 100000;
     const highRisk = MOCK_PROJECTS.filter(p => p.riskLevel === 'HIGH' || p.riskLevel === 'CRITICAL' || p.riskScore >= 60);
-    const similarWorks = MOCK_PROJECTS.filter(p => p.workTitle.toLowerCase().includes('pcc') || p.workTitle.toLowerCase().includes('road'));
+    const medRisk = MOCK_PROJECTS.filter(p => p.riskLevel === 'MEDIUM' || (p.riskScore >= 30 && p.riskScore < 60));
+    const lowRisk = MOCK_PROJECTS.filter(p => p.riskLevel === 'LOW' || p.riskScore < 30);
+    const similarWorks = MOCK_PROJECTS.filter(p => p.similarWorkDetected || p.workTitle.toLowerCase().includes('pcc') || p.workTitle.toLowerCase().includes('road'));
 
     setStats({
-      total_works: totalWorks || 1051,
-      total_sanctioned_amount_lakhs: totalSanctioned.toFixed(1) || '8378.2',
-      high_risk_count: highRisk.length || 6,
-      medium_risk_count: 42,
-      similar_works_count: 23
+      total_works: totalWorks,
+      total_sanctioned_amount_lakhs: totalSanctioned.toFixed(1),
+      high_risk_count: highRisk.length,
+      medium_risk_count: medRisk.length,
+      low_risk_count: lowRisk.length,
+      similar_works_count: similarWorks.length
     });
 
     setDatasetInfo({
       source_name: 'MPLADS e-SAKSHI Portal (Scored Pipeline)',
-      total_records: totalWorks || 1051,
+      total_records: totalWorks,
       total_columns: 16
     });
 
@@ -334,7 +337,7 @@ export const Dashboard: React.FC = () => {
       <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 flex justify-between items-center text-xs">
         <div>
           <span className="font-extrabold uppercase tracking-wide">DATA SOURCE: </span>
-          <span className="font-semibold">{datasetInfo?.source_name || 'MPLADS e-SAKSHI Portal (Scored Pipeline)'} | Records: {datasetInfo?.total_records || 1051} | Fields Available: {datasetInfo?.total_columns || 16} columns</span>
+          <span className="font-semibold">{datasetInfo?.source_name || 'MPLADS e-SAKSHI Portal (Scored Pipeline)'} | Records: {datasetInfo?.total_records || stats?.total_works || MOCK_PROJECTS.length} | Fields Available: {datasetInfo?.total_columns || 16} columns</span>
         </div>
         <span className="bg-amber-100 text-amber-800 border border-amber-300 px-3 py-1 rounded-full font-bold text-[11px] mt-2 sm:mt-0">
           Geolocation analysis disabled (No GPS data in source)
@@ -345,12 +348,16 @@ export const Dashboard: React.FC = () => {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-1">
           <span className="text-slate-500 font-bold text-xs">Total Tracked Works</span>
-          <p className="text-3xl font-black text-slate-900 font-serif">{(stats?.total_works || 0).toLocaleString()}</p>
+          <p className="text-3xl font-black text-slate-900 font-serif">{(stats?.total_works || MOCK_PROJECTS.length).toLocaleString()}</p>
         </div>
 
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-1">
           <span className="text-slate-500 font-bold text-xs">Total Sanctioned Value</span>
-          <p className="text-3xl font-black text-blue-600 font-serif">₹{stats?.total_sanctioned_amount_lakhs || ((stats?.total_sanctioned || 0) / 100000).toFixed(1)} L</p>
+          <p className="text-3xl font-black text-blue-600 font-serif">
+            ₹{stats?.total_sanctioned_amount_lakhs 
+              ? (parseFloat(stats.total_sanctioned_amount_lakhs) / 100).toLocaleString('en-IN', { maximumFractionDigits: 2, minimumFractionDigits: 1 })
+              : ((stats?.total_sanctioned || stats?.totalSanctioned || 0) / 10000000).toLocaleString('en-IN', { maximumFractionDigits: 2, minimumFractionDigits: 1 })} Cr
+          </p>
         </div>
 
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-1">

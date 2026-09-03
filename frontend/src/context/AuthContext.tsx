@@ -4,8 +4,7 @@ import api from '../services/api';
 
 interface AuthContextType {
   user: User | null;
-  role: Role;
-  login: (emailOrAuthId: string, role: Role, state?: string, district?: string) => Promise<void>;
+  login: (emailOrAuthId: string, role: Role, state?: string, district?: string, password?: string) => Promise<void>;
   register: (name: string, email: string, authorityId: string, role: Role, state?: string, district?: string) => Promise<void>;
   setScope: (role: Role, state?: string, district?: string) => Promise<void>;
   logout: () => void;
@@ -43,11 +42,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     initAuth();
   }, []);
 
-  const login = async (emailOrAuthId: string, selectedRole: Role, state?: string, district?: string) => {
+  const login = async (emailOrAuthId: string, selectedRole: Role, state?: string, district?: string, password?: string) => {
     try {
       const res = await api.post('/auth/login', {
         authorityId: emailOrAuthId,
-        password: 'password', // Demo password
+        password: password && password !== '••••••••••••' ? password : 'password',
         role: selectedRole,
         state,
         district

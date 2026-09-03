@@ -116,9 +116,15 @@ export const Login: React.FC = () => {
         username,
         selectedRole,
         selectedRole === 'MINISTRY' || selectedRole === 'MINISTER' ? 'All India' : (selectedState || 'All India'),
-        selectedRole === 'DISTRICT' ? (selectedDistrict || 'All Districts') : 'All Districts'
+        selectedRole === 'DISTRICT' ? (selectedDistrict || 'All Districts') : 'All Districts',
+        password
       );
-      navigate('/app');
+      // Role-specific redirect
+      const destination = 
+        selectedRole === 'MINISTER' ? '/app/minister' :
+        selectedRole === 'STATE' ? '/app/state' :
+        selectedRole === 'DISTRICT' ? '/app/district' : '/app/ministry';
+      navigate(destination);
     } catch (err: any) {
       setError(err.message || 'Login failed. Please check credentials.');
       refreshCaptcha();

@@ -11,6 +11,21 @@ const __dirname = path.dirname(__filename);
 const router = express.Router();
 const prisma = new PrismaClient();
 
+// Strictly require ADMIN or SUPER_ADMIN role (non-admin authority accounts are 403 Forbidden)
+function requireAdminRole(req, res, next) {
+  const role = (req.user?.role || '').toUpperCase();
+  if (['ADMIN', 'SUPER_ADMIN'].includes(role)) {
+    return next();
+  }
+  return res.status(403).json({ 
+    error: 'Access denied. System Administrator authorization required. Model registry, evaluation, and training controls are strictly restricted to Admin accounts.' 
+  });
+}
+
+// Apply authentication and strict admin role requirement to all model routes
+router.use(authMiddleware);
+router.use(requireAdminRole);
+
 // Helper to run Python evaluation script
 function runPythonPipeline(mode = 'status') {
   return new Promise((resolve, reject) => {
@@ -78,7 +93,7 @@ async function ensureBaselineModel() {
 /**
  * GET /api/models - List all model versions and registry status
  */
-router.get('/', authMiddleware, async (req, res) => {
+router.get('/', async (req, res) => {
   try {
     await ensureBaselineModel();
     const models = await prisma.modelVersion.findMany({
@@ -117,7 +132,7 @@ router.get('/', authMiddleware, async (req, res) => {
 /**
  * GET /api/models/active - Get current active production model
  */
-router.get('/active', authMiddleware, async (req, res) => {
+router.get('/active', async (req, res) => {
   try {
     await ensureBaselineModel();
     let active = await prisma.modelVersion.findFirst({
@@ -138,7 +153,7 @@ router.get('/active', authMiddleware, async (req, res) => {
 /**
  * GET /api/models/dataset-status - Check feedback dataset readiness for supervised training
  */
-router.get('/dataset-status', authMiddleware, async (req, res) => {
+router.get('/dataset-status', async (req, res) => {
   try {
     const status = await runPythonPipeline('status');
     res.json(status);
@@ -151,7 +166,7 @@ router.get('/dataset-status', authMiddleware, async (req, res) => {
 /**
  * POST /api/models/evaluate - Run model evaluation benchmark
  */
-router.post('/evaluate', authMiddleware, async (req, res) => {
+router.post('/evaluate', async (req, res) => {
   try {
     const benchmarkResults = await runPythonPipeline('benchmark');
 
@@ -207,7 +222,7 @@ router.post('/evaluate', authMiddleware, async (req, res) => {
 /**
  * POST /api/models/train - Train supervised model if sufficient data exists
  */
-router.post('/train', authMiddleware, async (req, res) => {
+router.post('/train', async (req, res) => {
   try {
     const datasetStatus = await runPythonPipeline('status');
 
@@ -236,7 +251,7 @@ router.post('/train', authMiddleware, async (req, res) => {
 /**
  * POST /api/models/:version/promote - Promote an approved candidate model to production
  */
-router.post('/:version/promote', authMiddleware, async (req, res) => {
+router.post('/:version/promote', async (req, res) => {
   try {
     const version = req.params.version;
     const targetModel = await prisma.modelVersion.findUnique({

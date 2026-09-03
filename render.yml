@@ -7,9 +7,9 @@ services:
     buildCommand: npm run render:build
     startCommand: npm run render:start
     envVars:
-      - key: NODE_ENV
-        value: production
       - key: PORT
         value: 10000
       - key: JWT_SECRET
         generateValue: true
+      - key: NPM_CONFIG_PRODUCTION
+        value: "false"

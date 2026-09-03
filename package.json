@@ -6,8 +6,7 @@
   "scripts": {
     "dev": "npm --prefix frontend run dev",
     "build": "npm --prefix frontend run build",
-    "preview": "npm --prefix frontend run preview",
-    "render:build": "npm --prefix frontend install && npm --prefix frontend run build && npm --prefix backend install && cd backend && npx prisma db push && node scripts/seed.js",
+    "render:build": "npm --prefix frontend install --include=dev && npm --prefix frontend run build && npm --prefix backend install && cd backend && npx prisma generate && npx prisma db push && node scripts/seed.js",
     "render:start": "cd backend && npm start"
   },
   "dependencies": {

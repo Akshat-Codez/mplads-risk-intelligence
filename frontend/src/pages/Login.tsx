@@ -4,34 +4,14 @@ import { StateEmblem } from '../components/common/StateEmblem';
 import { UserCheck, KeyRound, RotateCcw } from '../components/common/Icons';
 import { useAuth } from '../context/AuthContext';
 import { Role } from '../types';
-import { MOCK_PROJECTS } from '../data/mockData';
+import { INDIA_STATES_DISTRICTS } from '../data/indiaHierarchy';
 import api from '../services/api';
-
-function extractLocations(projects: any[]): Record<string, string[]> {
-  const map: Record<string, string[]> = {};
-  for (const p of projects) {
-    if (!p.state) continue;
-    const st = p.state.trim();
-    if (!st || st === 'UNKNOWN') continue;
-    if (!map[st]) map[st] = [];
-    if (p.district) {
-      const dt = p.district.trim();
-      if (dt && dt !== 'UNKNOWN' && !map[st].includes(dt)) {
-        map[st].push(dt);
-      }
-    }
-  }
-  for (const st of Object.keys(map)) {
-    map[st].sort();
-  }
-  return map;
-}
 
 export const Login: React.FC = () => {
   const [searchParams] = useSearchParams();
   const initialRole = (searchParams.get('role') as Role) || 'MINISTRY';
 
-  const defaultLocations = extractLocations(MOCK_PROJECTS);
+  const defaultLocations = INDIA_STATES_DISTRICTS;
   const defaultStates = Object.keys(defaultLocations).sort();
 
   const generateCaptcha = () => {
@@ -49,8 +29,8 @@ export const Login: React.FC = () => {
   const [captchaInput, setCaptchaInput] = useState('');
   const [selectedRole, setSelectedRole] = useState<Role>(initialRole);
   const [locations, setLocations] = useState<Record<string, string[]>>(defaultLocations);
-  const [selectedState, setSelectedState] = useState(defaultStates[0] || 'Andhra Pradesh');
-  const [selectedDistrict, setSelectedDistrict] = useState(defaultLocations[defaultStates[0]]?.[0] || '');
+  const [selectedState, setSelectedState] = useState(defaultStates.includes('Uttar Pradesh') ? 'Uttar Pradesh' : (defaultStates[0] || 'Andhra Pradesh'));
+  const [selectedDistrict, setSelectedDistrict] = useState(defaultLocations['Uttar Pradesh']?.[0] || defaultLocations[defaultStates[0]]?.[0] || '');
   
   const [error, setError] = useState<string | null>(null);
   const [showForgotPassword, setShowForgotPassword] = useState<boolean>(false);
@@ -73,9 +53,9 @@ export const Login: React.FC = () => {
           setLocations(locs);
           const states = Object.keys(locs).sort();
           if (states.length > 0) {
-            setSelectedState(prev => (locs[prev] ? prev : states[0]));
+            setSelectedState(prev => (locs[prev] ? prev : (states.includes('Uttar Pradesh') ? 'Uttar Pradesh' : states[0])));
             setSelectedDistrict(prev => {
-              const curDistricts = locs[selectedState] || locs[states[0]] || [];
+              const curDistricts = locs[selectedState] || locs['Uttar Pradesh'] || locs[states[0]] || [];
               return curDistricts.includes(prev) ? prev : (curDistricts[0] || '');
             });
           }

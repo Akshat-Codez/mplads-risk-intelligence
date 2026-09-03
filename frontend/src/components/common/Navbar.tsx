@@ -51,6 +51,19 @@ export const Navbar: React.FC = () => {
         </button>
       );
     }
+    if (role === 'MINISTER') {
+      return (
+        <button
+          onClick={() => setShowScopeModal(!showScopeModal)}
+          className="flex items-center space-x-1.5 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 px-3 py-1.5 rounded-full text-xs font-bold transition shadow-sm cursor-pointer"
+          title="Click to switch authority jurisdiction scope"
+        >
+          <span>🇮🇳</span>
+          <span>PORTFOLIO:</span>
+          <span className="font-extrabold text-amber-950 underline">{user?.state || 'Uttar Pradesh'}</span>
+        </button>
+      );
+    }
     return (
       <button
         onClick={() => setShowScopeModal(!showScopeModal)}
@@ -94,6 +107,13 @@ export const Navbar: React.FC = () => {
               >
                 <span>🏛️ National Jurisdiction</span>
                 <span className="text-[10px] text-slate-500">All India</span>
+              </button>
+              <button
+                onClick={() => handleScopeChange('MINISTER', user?.state || 'Uttar Pradesh', 'All Districts')}
+                className={`w-full text-left p-2 rounded font-bold flex items-center justify-between ${role === 'MINISTER' ? 'bg-amber-100 text-amber-900' : 'hover:bg-slate-100 text-slate-700'}`}
+              >
+                <span>🇮🇳 Hon'ble Minister Portfolio</span>
+                <span className="text-[10px] text-amber-800">{user?.state || 'Uttar Pradesh'}</span>
               </button>
               <button
                 onClick={() => handleScopeChange('STATE', user?.state || 'Uttar Pradesh', 'All Districts')}

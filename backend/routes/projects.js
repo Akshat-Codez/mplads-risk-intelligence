@@ -7,6 +7,7 @@ import path from 'path';
 import { parse } from 'csv-parse/sync';
 import { execSync } from 'child_process';
 import { aggregateRisk } from '../risk/riskAggregator.js';
+import { getDistrictQueryVariants } from '../data/indiaHierarchy.js';
 
 const router = express.Router();
 const prisma = new PrismaClient();
@@ -162,8 +163,14 @@ router.get('/', authMiddleware, async (req, res) => {
     let where = {};
 
     // Apply user filters
-    if (state) where.state = state;
-    if (district) where.district = district;
+    if (state && state !== 'ALL' && state !== 'All India') where.state = state;
+    if (district && district !== 'ALL' && district !== 'All Districts') {
+      const variants = getDistrictQueryVariants(district);
+      where.OR = [
+        ...(where.OR || []),
+        ...variants.map(v => ({ district: { contains: v } }))
+      ];
+    }
     if (constituency) where.constituency = constituency;
     if (work_type) where.workType = work_type;
     if (status) where.workStatus = status;

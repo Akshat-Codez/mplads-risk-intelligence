@@ -15,6 +15,7 @@ import feedbackRoutes from './routes/feedback.js';
 import modelRoutes from './routes/models.js';
 import adminRoutes from './routes/admin.js';
 import authMiddleware from './middleware/auth.js';
+import { INDIA_STATES_DISTRICTS, normalizeStateName } from './data/indiaHierarchy.js';
 
 dotenv.config();
 
@@ -112,44 +113,34 @@ app.post('/api/auth/register', async (req, res) => {
   }
 });
 
-// GET /api/auth/locations - Available States and Districts
+// GET /api/auth/locations - Authoritative States and Districts
 app.get('/api/auth/locations', async (req, res) => {
   try {
-    const records = await prisma.project.findMany({
-      select: { state: true, district: true },
-      distinct: ['state', 'district'],
-      orderBy: [{ state: 'asc' }, { district: 'asc' }]
-    });
-
-    const stateDistricts = {};
-    for (const r of records) {
-      if (!r.state) continue;
-      const st = r.state.replace(/\xa0/g, '').trim();
-      if (!st || st === 'UNKNOWN') continue;
-
-      const dt = r.district ? r.district.replace(/\xa0/g, '').trim() : null;
-      if (!stateDistricts[st]) {
-        stateDistricts[st] = [];
-      }
-      if (dt && dt !== 'UNKNOWN' && !stateDistricts[st].includes(dt)) {
-        stateDistricts[st].push(dt);
-      }
-    }
-
-    for (const st of Object.keys(stateDistricts)) {
-      stateDistricts[st].sort();
-    }
-
-    const validStates = Object.keys(stateDistricts).sort();
-
+    const states = Object.keys(INDIA_STATES_DISTRICTS).sort();
     res.json({
-      states: validStates,
-      stateDistricts
+      states,
+      stateDistricts: INDIA_STATES_DISTRICTS
     });
   } catch (err) {
     console.error('Error fetching locations:', err);
     res.status(500).json({ error: 'Failed to fetch location hierarchy' });
   }
+});
+
+// GET /api/locations/states - All valid states
+app.get('/api/locations/states', (req, res) => {
+  res.json(Object.keys(INDIA_STATES_DISTRICTS).sort());
+});
+
+// GET /api/locations/districts - All valid districts for a state
+app.get('/api/locations/districts', (req, res) => {
+  const state = req.query.state;
+  if (!state || state === 'ALL' || state === 'All India') {
+    return res.json([]);
+  }
+  const canonical = normalizeStateName(state);
+  const districts = INDIA_STATES_DISTRICTS[canonical] || [];
+  res.json(districts);
 });
 
 // SET / UPDATE AUTHORITY SCOPE Endpoint

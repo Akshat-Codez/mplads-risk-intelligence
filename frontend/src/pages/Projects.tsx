@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Search, Filter, Download, RotateCcw } from '../components/common/Icons';
 import { MOCK_PROJECTS } from '../data/mockData';
 import { useAuth } from '../context/AuthContext';
+import { getAllCanonicalStates, getCanonicalDistricts } from '../data/indiaHierarchy';
 
 export const Projects: React.FC = () => {
   const navigate = useNavigate();
@@ -40,10 +41,9 @@ export const Projects: React.FC = () => {
     setPage(1);
   }, [searchTerm, selectedState, selectedDistrict, selectedVendor, selectedRisk, selectedCategory]);
 
-  // Extract unique States dynamically
+  // Extract unique States from authoritative directory
   const uniqueStates = useMemo(() => {
-    const states = Array.from(new Set(MOCK_PROJECTS.map(p => p.state).filter(Boolean))).sort();
-    return ['ALL', ...states];
+    return ['ALL', ...getAllCanonicalStates()];
   }, []);
 
   // Extract unique Vendors dynamically
@@ -56,12 +56,16 @@ export const Projects: React.FC = () => {
     return ['ALL', ...vendors];
   }, []);
 
-  // Extract unique Districts based on selected State
+  // Extract ALL valid Districts based on selected State
   const uniqueDistricts = useMemo(() => {
     const targetState = selectedState === 'ALL' ? (user?.state || '') : selectedState;
-    const filtered = targetState ? MOCK_PROJECTS.filter(p => p.state === targetState) : MOCK_PROJECTS;
-    const dists = Array.from(new Set(filtered.map(p => p.district).filter(Boolean))).sort();
-    return ['ALL', ...dists];
+    if (targetState && targetState !== 'ALL' && targetState !== 'All India') {
+      const canonical = getCanonicalDistricts(targetState);
+      if (canonical.length > 0) {
+        return ['ALL', ...canonical];
+      }
+    }
+    return ['ALL'];
   }, [selectedState, user]);
 
   // Filtered Projects Logic

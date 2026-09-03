@@ -23,7 +23,7 @@ interface NavItem {
 const NAV_BY_ROLE: Record<Role, NavItem[]> = {
   MINISTER: [
     { label: 'Executive Portfolio', path: '/app/minister', icon: BarChart3 },
-    { label: 'GIS Project Risk Map', path: '/app/gis-analytics', icon: MapPin },
+    { label: 'Vendor Intelligence', path: '/app/vendors', icon: Building2 },
     { label: 'Portfolio Projects', path: '/app/projects', icon: FolderKanban },
     { label: 'Portfolio Analytics', path: '/app/analytics', icon: PieChart }
   ],

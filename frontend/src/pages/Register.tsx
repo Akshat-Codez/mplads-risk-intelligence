@@ -4,7 +4,7 @@ import { StateEmblem } from '../components/common/StateEmblem';
 import { UserCheck, KeyRound, Mail, User, Building, ArrowRight } from '../components/common/Icons';
 import { useAuth } from '../context/AuthContext';
 import { Role } from '../types';
-import { MOCK_PROJECTS } from '../data/mockData';
+import { INDIA_STATES_DISTRICTS } from '../data/indiaHierarchy';
 
 import api from '../services/api';
 
@@ -19,9 +19,9 @@ export const Register: React.FC = () => {
   const [selectedRole, setSelectedRole] = useState<Role>('STATE');
   const [house, setHouse] = useState('Lok Sabha');
   
-  const [state, setState] = useState('');
-  const [district, setDistrict] = useState('');
-  const [locations, setLocations] = useState<Record<string, string[]>>({});
+  const [state, setState] = useState('Uttar Pradesh');
+  const [district, setDistrict] = useState('Varanasi');
+  const [locations, setLocations] = useState<Record<string, string[]>>(INDIA_STATES_DISTRICTS);
 
   const { register } = useAuth();
   const navigate = useNavigate();
@@ -32,14 +32,6 @@ export const Register: React.FC = () => {
         const data = res.data;
         if (data.stateDistricts && Object.keys(data.stateDistricts).length > 0) {
           setLocations(data.stateDistricts);
-          const states = Object.keys(data.stateDistricts).sort();
-          if (states.length > 0) {
-            setState(states[0]);
-            const dists = data.stateDistricts[states[0]] || [];
-            if (dists.length > 0) {
-              setDistrict(dists[0]);
-            }
-          }
         }
       })
       .catch(err => {
@@ -48,19 +40,11 @@ export const Register: React.FC = () => {
   }, []);
 
   const uniqueStates = useMemo(() => {
-    if (Object.keys(locations).length > 0) {
-      return Object.keys(locations).sort();
-    }
-    return Array.from(new Set(MOCK_PROJECTS.map(p => p.state).filter(Boolean))).sort();
+    return Object.keys(locations).sort();
   }, [locations]);
 
   const uniqueDistricts = useMemo(() => {
-    if (locations[state] && locations[state].length > 0) {
-      return locations[state];
-    }
-    const filtered = MOCK_PROJECTS.filter(p => p.state === state);
-    const dists = Array.from(new Set(filtered.map(p => p.district).filter(Boolean))).sort();
-    return dists;
+    return locations[state] || INDIA_STATES_DISTRICTS[state] || [];
   }, [state, locations]);
 
   const handleStateChange = (st: string) => {

@@ -2,6 +2,7 @@ import express from 'express';
 import { PrismaClient } from '@prisma/client';
 import authMiddleware from '../middleware/auth.js';
 import { getAuthorityScopeFilter } from '../utils/scopeFilter.js';
+import { getDistrictQueryVariants } from '../data/indiaHierarchy.js';
 
 const router = express.Router();
 const prisma = new PrismaClient();
@@ -41,8 +42,14 @@ router.get('/summary', authMiddleware, async (req, res) => {
     const scopeFilter = getAuthorityScopeFilter(req.user);
 
     let where = {};
-    if (state) where.state = state;
-    if (district) where.district = district;
+    if (state && state !== 'ALL' && state !== 'All India') where.state = state;
+    if (district && district !== 'ALL' && district !== 'All Districts') {
+      const variants = getDistrictQueryVariants(district);
+      where.OR = [
+        ...(where.OR || []),
+        ...variants.map(v => ({ district: { contains: v } }))
+      ];
+    }
 
     // Apply mandatory authority scope
     if (Object.keys(scopeFilter).length > 0) {

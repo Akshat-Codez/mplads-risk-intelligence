@@ -4,6 +4,8 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { PrismaClient } from '@prisma/client';
 import dotenv from 'dotenv';
+import path from 'path';
+import fs from 'fs';
 
 // Import Routes
 import projectRoutes from './routes/projects.js';
@@ -392,6 +394,23 @@ app.get('/api/cases', authMiddleware, async (req, res) => {
     res.status(500).json({ error: 'Failed to retrieve cases' });
   }
 });
+
+// Serve static frontend in production (Single Service Fullstack Deployment)
+const possibleDistPaths = [
+  path.resolve(process.cwd(), '../frontend/dist'),
+  path.resolve(process.cwd(), 'frontend/dist'),
+  path.resolve(process.cwd(), '../dist'),
+  path.resolve(process.cwd(), 'dist')
+];
+const frontendDist = possibleDistPaths.find(p => fs.existsSync(p));
+if (frontendDist) {
+  console.log(`📦 Serving static frontend from: ${frontendDist}`);
+  app.use(express.static(frontendDist));
+  app.get('*', (req, res, next) => {
+    if (req.path.startsWith('/api')) return next();
+    res.sendFile(path.join(frontendDist, 'index.html'));
+  });
+}
 
 app.listen(PORT, () => {
   console.log(`🏛️ NIRMAN Auth Backend Server running on http://localhost:${PORT}`);

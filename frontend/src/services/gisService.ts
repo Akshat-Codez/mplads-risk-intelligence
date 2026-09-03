@@ -1,4 +1,5 @@
 import { Project } from '../types';
+import { getCanonicalDistrict, normalizeStateName } from '../data/indiaHierarchy';
 
 export interface StateGISMetrics {
   state: string;
@@ -141,25 +142,29 @@ export function computeStateGISMetrics(projects: Project[]): StateGISMetrics[] {
  * Dynamically computes District-level GIS Risk Metrics for a given State
  */
 export function computeDistrictGISMetrics(projects: Project[], selectedState: string): DistrictGISMetrics[] {
+  const normState = normalizeStateName(selectedState);
   const stateProjects = selectedState === 'ALL'
     ? projects
-    : projects.filter(p => p.state && p.state.toUpperCase().includes(selectedState.toUpperCase()));
+    : projects.filter(p => normalizeStateName(p.state) === normState || (p.state && p.state.toUpperCase().includes(selectedState.toUpperCase())));
 
-  const districtMap: Record<string, { total: number; sumSanctioned: number; highRisk: number; sumScore: number; state: string }> = {};
+  const districtMap: Record<string, { total: number; sumSanctioned: number; highRisk: number; sumScore: number; state: string; canonicalName: string }> = {};
 
   stateProjects.forEach(p => {
-    const dst = (p.district || 'BENGALURU URBAN').toUpperCase();
+    const rawDst = p.district || 'Bengaluru Urban';
+    const canonicalDst = getCanonicalDistrict(rawDst, selectedState);
+    const key = canonicalDst.toUpperCase();
     const st = (p.state || selectedState).toUpperCase();
-    if (!districtMap[dst]) {
-      districtMap[dst] = { total: 0, sumSanctioned: 0, highRisk: 0, sumScore: 0, state: st };
+
+    if (!districtMap[key]) {
+      districtMap[key] = { total: 0, sumSanctioned: 0, highRisk: 0, sumScore: 0, state: st, canonicalName: canonicalDst };
     }
-    districtMap[dst].total += 1;
-    districtMap[dst].sumSanctioned += p.sanctionedAmount || 0;
+    districtMap[key].total += 1;
+    districtMap[key].sumSanctioned += p.sanctionedAmount || 0;
     const s = p.riskScore ?? p.prototype_risk_score ?? 0;
-    districtMap[dst].sumScore += s;
+    districtMap[key].sumScore += s;
     const l = p.riskLevel || p.risk_level;
     if (s >= 50 || l === 'HIGH' || l === 'CRITICAL') {
-      districtMap[dst].highRisk += 1;
+      districtMap[key].highRisk += 1;
     }
   });
 
@@ -182,7 +187,7 @@ export function computeDistrictGISMetrics(projects: Project[], selectedState: st
     const coords = DISTRICT_COORDINATES[dstKey] || [12.9716, 77.5946];
 
     return {
-      district: dstKey,
+      district: data.canonicalName || dstKey,
       state: data.state,
       lat: coords[0],
       lng: coords[1],

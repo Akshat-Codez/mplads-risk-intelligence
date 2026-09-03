@@ -1,8 +1,11 @@
+import { normalizeStateName, getDistrictQueryVariants, normalizeLocationName, getCanonicalDistrict } from '../data/indiaHierarchy.js';
+
 /**
  * Authority Scope Filter Helper
  * Enforces server-side data isolation based on authenticated officer credentials.
+ * Uses canonical geographic normalization to ensure valid projects are never
+ * excluded due to case sensitivity, whitespace, or spelling aliases.
  */
-
 export function getAuthorityScopeFilter(user) {
   if (!user) return {};
 
@@ -13,15 +16,35 @@ export function getAuthorityScopeFilter(user) {
     return {};
   }
 
+  // Helper to build state filter matching both canonical and raw representation
+  const buildStateCondition = (stateInput) => {
+    if (!stateInput || stateInput === 'All India' || stateInput === 'ALL') return null;
+    const canonical = normalizeStateName(stateInput);
+    const variants = Array.from(new Set([
+      stateInput.trim(),
+      canonical,
+      canonical ? canonical.toUpperCase() : null,
+      canonical ? canonical.toLowerCase() : null
+    ])).filter(Boolean);
+    return { OR: variants.map(v => ({ state: { contains: v } })) };
+  };
+
+  // Helper to build district filter matching all query aliases and case variants
+  const buildDistrictCondition = (distInput) => {
+    if (!distInput || distInput === 'All Districts' || distInput === 'ALL') return null;
+    const variants = getDistrictQueryVariants(distInput);
+    return { OR: variants.map(v => ({ district: { contains: v } })) };
+  };
+
   // 2. Minister Scope: Scoped to their assigned regional portfolio / State area
   if (role === 'MINISTER') {
     const andClauses = [];
-    if (user.state && user.state !== 'All India') {
-      andClauses.push({ state: { equals: user.state.trim() } });
-    }
-    if (user.district && user.district !== 'All Districts') {
-      andClauses.push({ district: { equals: user.district.trim() } });
-    }
+    const stateCond = buildStateCondition(user.state);
+    if (stateCond) andClauses.push(stateCond);
+
+    const distCond = buildDistrictCondition(user.district);
+    if (distCond) andClauses.push(distCond);
+
     if (andClauses.length === 0) return {};
     if (andClauses.length === 1) return andClauses[0];
     return { AND: andClauses };
@@ -29,31 +52,18 @@ export function getAuthorityScopeFilter(user) {
 
   // 3. State Authority Scope -> Restricted strictly to their assigned state
   if (role === 'STATE') {
-    if (!user.state || user.state === 'All India') {
-      return {};
-    }
-    return {
-      state: {
-        equals: user.state.trim()
-      }
-    };
+    const stateCond = buildStateCondition(user.state);
+    return stateCond || {};
   }
 
-  // 3. District Authority Scope -> Restricted strictly to their assigned state AND district
+  // 4. District Authority Scope -> Restricted strictly to their assigned state AND district
   if (role === 'DISTRICT') {
     const andClauses = [];
+    const stateCond = buildStateCondition(user.state);
+    if (stateCond) andClauses.push(stateCond);
 
-    if (user.state && user.state !== 'All India') {
-      andClauses.push({
-        state: { equals: user.state.trim() }
-      });
-    }
-
-    if (user.district && user.district !== 'All Districts') {
-      andClauses.push({
-        district: { equals: user.district.trim() }
-      });
-    }
+    const distCond = buildDistrictCondition(user.district);
+    if (distCond) andClauses.push(distCond);
 
     if (andClauses.length === 0) return {};
     if (andClauses.length === 1) return andClauses[0];
@@ -75,33 +85,26 @@ export function isProjectInScope(user, project) {
     return true;
   }
 
-  const projState = (project.state || '').trim().toLowerCase();
-  const projDistrict = (project.district || '').trim().toLowerCase();
+  const projState = normalizeLocationName(project.state);
+  const projDistrict = normalizeLocationName(project.district);
 
-  const userState = (user.state || '').trim().toLowerCase();
-  const userDistrict = (user.district || '').trim().toLowerCase();
+  const userState = normalizeLocationName(user.state);
+  const userDistrict = normalizeLocationName(user.district);
 
-  // Minister Scope Validation
-  if (role === 'MINISTER') {
-    if (userState && userState !== 'all india' && projState !== userState) {
-      return false;
-    }
-    if (userDistrict && userDistrict !== 'all districts' && projDistrict !== userDistrict) {
-      return false;
-    }
-    return true;
+  const stateMatches = !userState || userState === 'all india' || userState === 'all' ||
+    projState === userState || normalizeLocationName(normalizeStateName(project.state)) === normalizeLocationName(normalizeStateName(user.state));
+
+  if (!stateMatches) return false;
+
+  if (role === 'DISTRICT' || (role === 'MINISTER' && userDistrict && userDistrict !== 'all districts' && userDistrict !== 'all')) {
+    const projCanonicalDist = normalizeLocationName(getCanonicalDistrict(project.district, project.state));
+    const userCanonicalDist = normalizeLocationName(getCanonicalDistrict(user.district, user.state));
+    const distMatches = projDistrict === userDistrict || 
+      projCanonicalDist === userCanonicalDist || 
+      projDistrict === userCanonicalDist || 
+      projCanonicalDist === userDistrict;
+    return distMatches;
   }
 
-  if (role === 'STATE') {
-    if (!userState || userState === 'all india') return true;
-    return projState === userState;
-  }
-
-  if (role === 'DISTRICT') {
-    const stateMatch = (!userState || userState === 'all india') || (projState === userState);
-    const districtMatch = (!userDistrict || userDistrict === 'all districts') || (projDistrict === userDistrict);
-    return stateMatch && districtMatch;
-  }
-
-  return false;
+  return true;
 }

@@ -244,6 +244,20 @@ export const INDIA_STATES_DISTRICTS: Record<string, string[]> = {
   ]
 };
 
+/**
+ * Shared Canonical Normalization Helper
+ * Normalizes location names for safe, robust comparison:
+ * trims whitespace, collapses repeated spaces, normalizes unicode, and lowercases.
+ */
+export function normalizeLocationName(value: any): string {
+  if (!value) return '';
+  return String(value)
+    .normalize('NFKD')
+    .trim()
+    .replace(/\s+/g, ' ')
+    .toLowerCase();
+}
+
 export const DISTRICT_NORMALIZATION_MAP: Record<string, string> = {
   // Karnataka
   "BANGALORE URBAN": "Bengaluru Urban",
@@ -265,6 +279,17 @@ export const DISTRICT_NORMALIZATION_MAP: Record<string, string> = {
   "UTTAR KANNAND": "Uttara Kannada",
   "NORTH CANARA": "Uttara Kannada",
 
+  // Gujarat
+  "BANAS KANTHA": "Banaskantha",
+  "PANCH MAHALS": "Panchmahal",
+  "PANCHMAHALS": "Panchmahal",
+  "MAHESANA": "Mehsana",
+  "SABAR KANTHA": "Sabarkantha",
+  "DANGS": "Dang",
+  "KACHCHH": "Kutch",
+  "ARVALLI": "Aravalli",
+  "VAV-THARAD": "Banaskantha",
+
   // Uttar Pradesh
   "ALLAHABAD": "Prayagraj",
   "FAIZABAD": "Ayodhya",
@@ -274,6 +299,7 @@ export const DISTRICT_NORMALIZATION_MAP: Record<string, string> = {
   "NOIDA": "Gautam Buddha Nagar",
   "KANPUR": "Kanpur Nagar",
   "BARA BANKI": "Barabanki",
+  "MAHRAJGANJ": "Maharajganj",
 
   // Maharashtra
   "AHMEDNAGAR": "Ahilyanagar",
@@ -284,32 +310,134 @@ export const DISTRICT_NORMALIZATION_MAP: Record<string, string> = {
   // Bihar
   "EAST CHAMPARAN": "Purbi Champaran",
   "WEST CHAMPARAN": "Pashchim Champaran",
+  "KAIMUR": "Kaimur (Bhabua)",
 
   // Odisha
   "BALESHWAR": "Balasore",
+  "KATAKA": "Cuttack",
+  "KENDRAPADA": "Kendrapara",
+  "JAGATSINGHAPUR": "Jagatsinghpur",
+  "SUNDARAGADA": "Sundargarh",
+  "NAYAGADA": "Nayagarh",
+  "ANUGOLA": "Angul",
   "KEONJHAR": "Kendujhar",
   "ORISSA": "Odisha",
   "SONEPUR": "Subarnapur",
 
   // Punjab / Haryana
   "MOHALI": "Sahibzada Ajit Singh Nagar",
+  "S.A.S NAGAR": "Sahibzada Ajit Singh Nagar",
+  "SAS NAGAR": "Sahibzada Ajit Singh Nagar",
   "NAWANSHAHR": "Shahid Bhagat Singh Nagar",
-  "GURGAON": "Gurugram"
+  "GURGAON": "Gurugram",
+
+  // Tamil Nadu
+  "MADRAS": "Chennai",
+  "TUTICORIN": "Thoothukudi",
+  "THOOTHUKKUDI": "Thoothukudi",
+  "TANJORE": "Thanjavur",
+  "KANCHEEPURAM": "Kanchipuram",
+  "THIRUVALLUR": "Tiruvallur",
+  "THIRUVARUR": "Tiruvarur",
+
+  // Andhra Pradesh
+  "Y.S.R. KADAPA": "YSR Kadapa",
+  "YSR": "YSR Kadapa",
+  "KADAPA": "YSR Kadapa",
+  "NELLORE": "Sri Potti Sriramulu Nellore",
+
+  // Chhattisgarh
+  "BALODABAZAR-BHATAPARA": "Baloda Bazar-Bhatapara",
+  "KABEERDHAM": "Kabirdham",
+  "GARIYABAND": "Gariaband",
+  "UTTAR BASTAR KANKER": "Kanker",
+
+  // Assam
+  "KAMRUP METRO": "Kamrup Metropolitan",
+  "SRIBHUMI": "Karimganj",
+  "MARIGAON": "Morigaon"
 };
+
+/**
+ * Normalizes state name to canonical form
+ */
+export function normalizeStateName(state: string | null | undefined): string {
+  if (!state) return '';
+  const s = normalizeLocationName(state);
+  if (s === 'uttaranchal') return 'Uttarakhand';
+  if (s === 'orissa') return 'Odisha';
+  if (s === 'up' || s === 'u.p.') return 'Uttar Pradesh';
+  if (s === 'mp' || s === 'm.p.') return 'Madhya Pradesh';
+  if (s === 'chattisgarh') return 'Chhattisgarh';
+  if (s === 'gujrat') return 'Gujarat';
+  if (s === 'uttrakhand') return 'Uttarakhand';
+
+  for (const officialState of Object.keys(INDIA_STATES_DISTRICTS)) {
+    if (normalizeLocationName(officialState) === s) {
+      return officialState;
+    }
+  }
+  return state.trim();
+}
+
+/**
+ * Returns canonical district name using case-insensitive normalization & alias mapping
+ */
+export function getCanonicalDistrict(district: string | null | undefined, state?: string | null): string {
+  if (!district) return '';
+  const norm = normalizeLocationName(district);
+
+  // 1. Check alias dictionary
+  for (const [alias, canonical] of Object.entries(DISTRICT_NORMALIZATION_MAP)) {
+    if (normalizeLocationName(alias) === norm) {
+      return canonical;
+    }
+  }
+
+  // 2. If state is provided, check official list for that state
+  if (state) {
+    const canonicalState = normalizeStateName(state);
+    const officialList = INDIA_STATES_DISTRICTS[canonicalState] || [];
+    for (const offDist of officialList) {
+      if (normalizeLocationName(offDist) === norm) {
+        return offDist;
+      }
+    }
+  }
+
+  // 3. Check across all official districts
+  for (const list of Object.values(INDIA_STATES_DISTRICTS)) {
+    for (const offDist of list) {
+      if (normalizeLocationName(offDist) === norm) {
+        return offDist;
+      }
+    }
+  }
+
+  // 4. Default: convert to clean title case
+  return district.trim().replace(/\w\S*/g, (w) => (w.replace(/^\w/, (c) => c.toUpperCase())));
+}
+
+/**
+ * Checks if two district names refer to the same district under canonical normalization
+ */
+export function isDistrictMatch(d1: string | null | undefined, d2: string | null | undefined): boolean {
+  if (!d1 || !d2) return false;
+  const n1 = normalizeLocationName(d1);
+  const n2 = normalizeLocationName(d2);
+  if (n1 === n2) return true;
+  const c1 = normalizeLocationName(getCanonicalDistrict(d1));
+  const c2 = normalizeLocationName(getCanonicalDistrict(d2));
+  return c1 === c2 || c1 === n2 || c2 === n1;
+}
 
 export function getCanonicalDistricts(state: string): string[] {
   if (!state || state === 'ALL' || state === 'All India') return [];
-  const sTrim = state.trim();
-  if (INDIA_STATES_DISTRICTS[sTrim]) {
-    return INDIA_STATES_DISTRICTS[sTrim];
-  }
-  // Try case-insensitive
-  const foundKey = Object.keys(INDIA_STATES_DISTRICTS).find(
-    k => k.toLowerCase() === sTrim.toLowerCase()
-  );
-  return foundKey ? INDIA_STATES_DISTRICTS[foundKey] : [];
+  const canonicalState = normalizeStateName(state);
+  return INDIA_STATES_DISTRICTS[canonicalState] || [];
 }
 
 export function getAllCanonicalStates(): string[] {
   return Object.keys(INDIA_STATES_DISTRICTS).sort();
 }
+

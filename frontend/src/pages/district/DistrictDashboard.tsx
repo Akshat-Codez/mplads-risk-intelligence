@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { MapPin, Search, Sparkles } from '../../components/common/Icons';
 import { MOCK_PROJECTS } from '../../data/mockData';
 import { useAuth } from '../../context/AuthContext';
+import { isDistrictMatch, getCanonicalDistrict } from '../../data/indiaHierarchy';
 import api from '../../services/api';
 
 export const DistrictDashboard: React.FC = () => {
@@ -18,6 +19,12 @@ export const DistrictDashboard: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState<'PRIORITY' | 'ALL' | 'UNINSPECTED' | 'AUDIT'>('PRIORITY');
   const [aiSummary, setAiSummary] = useState<string | null>(null);
+  const [liveMetrics, setLiveMetrics] = useState<{
+    totalWorks: number;
+    sanctionedCr: string;
+    expenditureCr: string;
+    highRiskCount: number;
+  } | null>(null);
 
   useEffect(() => {
     const fetchDistrictData = async () => {
@@ -31,15 +38,36 @@ export const DistrictDashboard: React.FC = () => {
             limit: 200
           }
         });
-        if (res.data?.projects && res.data.projects.length > 0) {
-          setProjects(res.data.projects);
+        const list = Array.isArray(res.data) ? res.data : (res.data?.projects || []);
+        if (list.length > 0) {
+          setProjects(list);
         } else {
-          // Fallback to local dataset
+          // Fallback to local dataset with canonical district matching
           const fallback = MOCK_PROJECTS.filter(p =>
-            (!assignedDistrict || assignedDistrict === 'All Districts' || p.district?.toUpperCase() === assignedDistrict.toUpperCase()) &&
+            (!assignedDistrict || assignedDistrict === 'All Districts' || isDistrictMatch(p.district, assignedDistrict)) &&
             (!assignedState || assignedState === 'All India' || p.state?.toUpperCase() === assignedState.toUpperCase())
           );
           setProjects(fallback);
+        }
+
+        // Fetch authoritative summary metrics directly from DB aggregate
+        try {
+          const summaryRes = await api.get('/dashboard/summary', {
+            params: {
+              state: assignedState === 'All India' ? undefined : assignedState,
+              district: assignedDistrict === 'All Districts' ? undefined : assignedDistrict
+            }
+          });
+          if (summaryRes.data) {
+            setLiveMetrics({
+              totalWorks: summaryRes.data.total_works ?? summaryRes.data.totalProjects ?? 0,
+              sanctionedCr: ((summaryRes.data.total_sanctioned || 0) / 10000000).toFixed(2),
+              expenditureCr: ((summaryRes.data.total_expenditure || 0) / 10000000).toFixed(2),
+              highRiskCount: summaryRes.data.high_risk_count ?? 0
+            });
+          }
+        } catch (e) {
+          console.warn('Dashboard summary load error:', e);
         }
 
         // Fetch AI briefing for district
@@ -52,7 +80,7 @@ export const DistrictDashboard: React.FC = () => {
       } catch (err) {
         console.warn('District data load error, using local dataset:', err);
         const fallback = MOCK_PROJECTS.filter(p =>
-          (!assignedDistrict || assignedDistrict === 'All Districts' || p.district?.toUpperCase() === assignedDistrict.toUpperCase()) &&
+          (!assignedDistrict || assignedDistrict === 'All Districts' || isDistrictMatch(p.district, assignedDistrict)) &&
           (!assignedState || assignedState === 'All India' || p.state?.toUpperCase() === assignedState.toUpperCase())
         );
         setProjects(fallback);
@@ -64,10 +92,10 @@ export const DistrictDashboard: React.FC = () => {
     fetchDistrictData();
   }, [assignedDistrict, assignedState]);
 
-  // Derived metrics
-  const totalWorks = projects.length;
-  const sanctionedCr = (projects.reduce((acc, p) => acc + (p.sanctionedAmount || p.sanctioned_amount || 0), 0) / 10000000).toFixed(2);
-  const expenditureCr = (projects.reduce((acc, p) => acc + (p.actualExpenditure || p.actual_expenditure || p.totalDisbursed || p.total_disbursed || 0), 0) / 10000000).toFixed(2);
+  // Derived metrics - uses live DB aggregate if available, otherwise computed from loaded set
+  const totalWorks = liveMetrics?.totalWorks ?? projects.length;
+  const sanctionedCr = liveMetrics?.sanctionedCr ?? (projects.reduce((acc, p) => acc + (p.sanctionedAmount || p.sanctioned_amount || 0), 0) / 10000000).toFixed(2);
+  const expenditureCr = liveMetrics?.expenditureCr ?? (projects.reduce((acc, p) => acc + (p.actualExpenditure || p.actual_expenditure || p.totalDisbursed || p.total_disbursed || 0), 0) / 10000000).toFixed(2);
   
   const highRiskWorks = useMemo(() => {
     return projects.filter(p => {

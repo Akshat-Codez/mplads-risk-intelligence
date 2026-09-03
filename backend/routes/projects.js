@@ -7,7 +7,7 @@ import path from 'path';
 import { parse } from 'csv-parse/sync';
 import { execSync } from 'child_process';
 import { aggregateRisk } from '../risk/riskAggregator.js';
-import { getDistrictQueryVariants } from '../data/indiaHierarchy.js';
+import { getDistrictQueryVariants, normalizeStateName, getCanonicalDistrict, normalizeLocationName } from '../data/indiaHierarchy.js';
 
 const router = express.Router();
 const prisma = new PrismaClient();
@@ -160,56 +160,73 @@ router.get('/', authMiddleware, async (req, res) => {
     // Base authority scoping filter
     const scopeFilter = getAuthorityScopeFilter(req.user);
 
-    let where = {};
+    const andClauses = [];
 
-    // Apply user filters
-    if (state && state !== 'ALL' && state !== 'All India') where.state = state;
+    // State filter (supports canonical state and case variants)
+    if (state && state !== 'ALL' && state !== 'All India') {
+      const canonicalState = normalizeStateName(state);
+      const stateVariants = Array.from(new Set([
+        state.trim(),
+        canonicalState,
+        canonicalState ? canonicalState.toUpperCase() : null
+      ])).filter(Boolean);
+      andClauses.push({
+        OR: stateVariants.map(v => ({ state: { contains: v } }))
+      });
+    }
+
+    // District filter (isolated OR clause of valid aliases and canonical forms)
     if (district && district !== 'ALL' && district !== 'All Districts') {
       const variants = getDistrictQueryVariants(district);
-      where.OR = [
-        ...(where.OR || []),
-        ...variants.map(v => ({ district: { contains: v } }))
-      ];
+      andClauses.push({
+        OR: variants.map(v => ({ district: { contains: v } }))
+      });
     }
-    if (constituency) where.constituency = constituency;
-    if (work_type) where.workType = work_type;
-    if (status) where.workStatus = status;
-    if (risk_level) where.riskLevel = risk_level.toUpperCase();
+
+    if (constituency) andClauses.push({ constituency });
+    if (work_type) andClauses.push({ workType: work_type });
+    if (status) andClauses.push({ workStatus: status });
+    if (risk_level) andClauses.push({ riskLevel: risk_level.toUpperCase() });
 
     // Apply vendor/contractor filter
     const vendorQuery = vendor || vendor_name || contractor;
     if (vendorQuery && vendorQuery !== 'ALL') {
-      where.vendorName = { contains: vendorQuery.trim() };
+      andClauses.push({ vendorName: { contains: vendorQuery.trim() } });
     }
 
     // Year filter
     if (year) {
-      where.OR = [
-        { recommendationDate: { contains: year } },
-        { sanctionDate: { contains: year } }
-      ];
+      andClauses.push({
+        OR: [
+          { recommendationDate: { contains: year } },
+          { sanctionDate: { contains: year } }
+        ]
+      });
     }
 
     // Search query
     if (search) {
       const searchLower = search.toLowerCase();
-      where.OR = [
-        ...(where.OR || []),
-        { projectId: { contains: searchLower } },
-        { workDescription: { contains: searchLower } },
-        { vendorName: { contains: searchLower } },
-        { mpName: { contains: searchLower } }
-      ];
+      andClauses.push({
+        OR: [
+          { projectId: { contains: searchLower } },
+          { workDescription: { contains: searchLower } },
+          { vendorName: { contains: searchLower } },
+          { mpName: { contains: searchLower } }
+        ]
+      });
     }
 
     // Merge with mandatory server-side authority scope
     if (Object.keys(scopeFilter).length > 0) {
       if (scopeFilter.AND) {
-        where.AND = [...(where.AND || []), ...scopeFilter.AND];
+        andClauses.push(...scopeFilter.AND);
       } else {
-        where = { ...where, ...scopeFilter };
+        andClauses.push(scopeFilter);
       }
     }
+
+    const where = andClauses.length > 0 ? { AND: andClauses } : {};
 
     // Order By
     const orderBy = {};

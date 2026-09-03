@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Search, Filter, Download, RotateCcw } from '../components/common/Icons';
 import { MOCK_PROJECTS } from '../data/mockData';
 import { useAuth } from '../context/AuthContext';
-import { getAllCanonicalStates, getCanonicalDistricts } from '../data/indiaHierarchy';
+import { getAllCanonicalStates, getCanonicalDistricts, isDistrictMatch, normalizeStateName } from '../data/indiaHierarchy';
 
 export const Projects: React.FC = () => {
   const navigate = useNavigate();
@@ -82,18 +82,18 @@ export const Projects: React.FC = () => {
       // 2. Strict Role-Enforced Jurisdiction Scoping
       let matchesState = true;
       if (role === 'STATE' || role === 'DISTRICT') {
-        const userState = (user?.state || 'Karnataka').toUpperCase();
-        matchesState = (p.state && p.state.toUpperCase().includes(userState)) || (userState && userState.includes((p.state || '').toUpperCase()));
+        const userState = user?.state || 'Karnataka';
+        matchesState = normalizeStateName(p.state) === normalizeStateName(userState);
       } else if (selectedState !== 'ALL') {
-        matchesState = p.state === selectedState;
+        matchesState = normalizeStateName(p.state) === normalizeStateName(selectedState);
       }
 
       let matchesDistrict = true;
       if (role === 'DISTRICT') {
-        const userDist = (user?.district || 'BENGALURU URBAN').toUpperCase();
-        matchesDistrict = (p.district && p.district.toUpperCase().includes(userDist)) || (userDist && userDist.includes((p.district || '').toUpperCase()));
+        const userDist = user?.district || 'BENGALURU URBAN';
+        matchesDistrict = isDistrictMatch(p.district, userDist);
       } else if (selectedDistrict !== 'ALL') {
-        matchesDistrict = p.district === selectedDistrict;
+        matchesDistrict = isDistrictMatch(p.district, selectedDistrict);
       }
 
       // 3. Vendor / Contractor Filter

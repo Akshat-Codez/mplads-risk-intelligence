@@ -245,6 +245,20 @@ export const INDIA_STATES_DISTRICTS = {
 };
 
 /**
+ * Shared Canonical Normalization Helper
+ * Normalizes location names for safe, robust comparison:
+ * trims whitespace, collapses repeated spaces, normalizes unicode, and lowercases.
+ */
+export function normalizeLocationName(value) {
+  if (!value) return '';
+  return String(value)
+    .normalize('NFKD')
+    .trim()
+    .replace(/\s+/g, ' ')
+    .toLowerCase();
+}
+
+/**
  * Normalization Aliases: Maps historical, colonial, vernacular, or alternate spellings
  * to canonical district names while preserving valid search aliases.
  */
@@ -269,6 +283,17 @@ export const DISTRICT_NORMALIZATION_MAP = {
   "UTTAR KANNAND": "Uttara Kannada",
   "NORTH CANARA": "Uttara Kannada",
 
+  // Gujarat
+  "BANAS KANTHA": "Banaskantha",
+  "PANCH MAHALS": "Panchmahal",
+  "PANCHMAHALS": "Panchmahal",
+  "MAHESANA": "Mehsana",
+  "SABAR KANTHA": "Sabarkantha",
+  "DANGS": "Dang",
+  "KACHCHH": "Kutch",
+  "ARVALLI": "Aravalli",
+  "VAV-THARAD": "Banaskantha",
+
   // Uttar Pradesh
   "ALLAHABAD": "Prayagraj",
   "FAIZABAD": "Ayodhya",
@@ -278,6 +303,7 @@ export const DISTRICT_NORMALIZATION_MAP = {
   "NOIDA": "Gautam Buddha Nagar",
   "KANPUR": "Kanpur Nagar",
   "BARA BANKI": "Barabanki",
+  "MAHRAJGANJ": "Maharajganj",
 
   // Maharashtra
   "AHMEDNAGAR": "Ahilyanagar",
@@ -288,22 +314,52 @@ export const DISTRICT_NORMALIZATION_MAP = {
   // Bihar
   "EAST CHAMPARAN": "Purbi Champaran",
   "WEST CHAMPARAN": "Pashchim Champaran",
+  "KAIMUR": "Kaimur (Bhabua)",
 
   // Odisha
   "BALESHWAR": "Balasore",
+  "KATAKA": "Cuttack",
+  "KENDRAPADA": "Kendrapara",
+  "JAGATSINGHAPUR": "Jagatsinghpur",
+  "SUNDARAGADA": "Sundargarh",
+  "NAYAGADA": "Nayagarh",
+  "ANUGOLA": "Angul",
   "KEONJHAR": "Kendujhar",
   "ORISSA": "Odisha",
   "SONEPUR": "Subarnapur",
 
   // Punjab / Haryana
   "MOHALI": "Sahibzada Ajit Singh Nagar",
+  "S.A.S NAGAR": "Sahibzada Ajit Singh Nagar",
+  "SAS NAGAR": "Sahibzada Ajit Singh Nagar",
   "NAWANSHAHR": "Shahid Bhagat Singh Nagar",
   "GURGAON": "Gurugram",
 
   // Tamil Nadu
   "MADRAS": "Chennai",
   "TUTICORIN": "Thoothukudi",
-  "TANJORE": "Thanjavur"
+  "THOOTHUKKUDI": "Thoothukudi",
+  "TANJORE": "Thanjavur",
+  "KANCHEEPURAM": "Kanchipuram",
+  "THIRUVALLUR": "Tiruvallur",
+  "THIRUVARUR": "Tiruvarur",
+
+  // Andhra Pradesh
+  "Y.S.R. KADAPA": "YSR Kadapa",
+  "YSR": "YSR Kadapa",
+  "KADAPA": "YSR Kadapa",
+  "NELLORE": "Sri Potti Sriramulu Nellore",
+
+  // Chhattisgarh
+  "BALODABAZAR-BHATAPARA": "Baloda Bazar-Bhatapara",
+  "KABEERDHAM": "Kabirdham",
+  "GARIYABAND": "Gariaband",
+  "UTTAR BASTAR KANKER": "Kanker",
+
+  // Assam
+  "KAMRUP METRO": "Kamrup Metropolitan",
+  "SRIBHUMI": "Karimganj",
+  "MARIGAON": "Morigaon"
 };
 
 /**
@@ -311,48 +367,100 @@ export const DISTRICT_NORMALIZATION_MAP = {
  */
 export function normalizeStateName(state) {
   if (!state) return null;
-  const s = state.trim();
-  if (s.toLowerCase() === 'uttaranchal') return 'Uttarakhand';
-  if (s.toLowerCase() === 'orissa') return 'Odisha';
+  const s = normalizeLocationName(state);
+  if (s === 'uttaranchal') return 'Uttarakhand';
+  if (s === 'orissa') return 'Odisha';
+  if (s === 'up' || s === 'u.p.') return 'Uttar Pradesh';
+  if (s === 'mp' || s === 'm.p.') return 'Madhya Pradesh';
+  if (s === 'chattisgarh') return 'Chhattisgarh';
+  if (s === 'gujrat') return 'Gujarat';
+  if (s === 'uttrakhand') return 'Uttarakhand';
+
   for (const officialState of Object.keys(INDIA_STATES_DISTRICTS)) {
-    if (officialState.toLowerCase() === s.toLowerCase()) {
+    if (normalizeLocationName(officialState) === s) {
       return officialState;
     }
   }
-  return s;
+  return state.trim();
 }
 
 /**
- * Normalizes district name to canonical form using alias dictionary
+ * Returns canonical district name using case-insensitive normalization & alias mapping
  */
-export function normalizeDistrictName(district) {
-  if (!district) return null;
-  const dUpper = district.trim().toUpperCase();
-  if (DISTRICT_NORMALIZATION_MAP[dUpper]) {
-    return DISTRICT_NORMALIZATION_MAP[dUpper];
+export function getCanonicalDistrict(district, state = null) {
+  if (!district) return '';
+  const norm = normalizeLocationName(district);
+
+  // 1. Check alias dictionary
+  for (const [alias, canonical] of Object.entries(DISTRICT_NORMALIZATION_MAP)) {
+    if (normalizeLocationName(alias) === norm) {
+      return canonical;
+    }
   }
-  return district.trim();
+
+  // 2. If state is provided, check official list for that state
+  if (state) {
+    const canonicalState = normalizeStateName(state);
+    const officialList = INDIA_STATES_DISTRICTS[canonicalState] || [];
+    for (const offDist of officialList) {
+      if (normalizeLocationName(offDist) === norm) {
+        return offDist;
+      }
+    }
+  }
+
+  // 3. Check across all official districts
+  for (const list of Object.values(INDIA_STATES_DISTRICTS)) {
+    for (const offDist of list) {
+      if (normalizeLocationName(offDist) === norm) {
+        return offDist;
+      }
+    }
+  }
+
+  // 4. Default: convert to clean title case
+  return district.trim().replace(/\w\S*/g, (w) => (w.replace(/^\w/, (c) => c.toUpperCase())));
 }
 
 /**
  * Returns all valid query aliases for a district to ensure SQL queries match
- * regardless of whether DB holds modern or historical name.
+ * regardless of whether DB holds modern or historical name, uppercase or title case.
  */
 export function getDistrictQueryVariants(district) {
   if (!district) return [];
-  const normalized = normalizeDistrictName(district);
-  const variants = new Set([district.trim(), normalized]);
+  const raw = district.trim();
+  const canonical = getCanonicalDistrict(district);
+  const normalized = normalizeLocationName(district);
 
-  // Add uppercase variants
-  variants.add(district.trim().toUpperCase());
-  variants.add(normalized.toUpperCase());
+  const variants = new Set([
+    raw,
+    canonical,
+    raw.toUpperCase(),
+    canonical.toUpperCase(),
+    raw.toLowerCase(),
+    canonical.toLowerCase()
+  ]);
 
-  // Reverse lookup in alias table
-  for (const [alias, canonical] of Object.entries(DISTRICT_NORMALIZATION_MAP)) {
-    if (canonical.toLowerCase() === normalized.toLowerCase()) {
+  // Add alias matches
+  for (const [alias, can] of Object.entries(DISTRICT_NORMALIZATION_MAP)) {
+    if (normalizeLocationName(can) === normalized || normalizeLocationName(alias) === normalized) {
       variants.add(alias);
+      variants.add(alias.toUpperCase());
+      variants.add(can);
+      variants.add(can.toUpperCase());
     }
   }
 
-  return Array.from(variants);
+  return Array.from(variants).filter(Boolean);
 }
+
+export function getCanonicalDistricts(state) {
+  if (!state || state === 'ALL' || state === 'All India') return [];
+  const canonicalState = normalizeStateName(state);
+  return INDIA_STATES_DISTRICTS[canonicalState] || [];
+}
+
+export function getAllCanonicalStates() {
+  return Object.keys(INDIA_STATES_DISTRICTS).sort();
+}
+

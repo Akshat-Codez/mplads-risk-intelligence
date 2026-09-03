@@ -2,7 +2,7 @@ import express from 'express';
 import { PrismaClient } from '@prisma/client';
 import authMiddleware from '../middleware/auth.js';
 import { getAuthorityScopeFilter } from '../utils/scopeFilter.js';
-import { getDistrictQueryVariants } from '../data/indiaHierarchy.js';
+import { getDistrictQueryVariants, normalizeStateName, getCanonicalDistrict, getCanonicalDistricts, normalizeLocationName, INDIA_STATES_DISTRICTS } from '../data/indiaHierarchy.js';
 
 const router = express.Router();
 const prisma = new PrismaClient();
@@ -567,6 +567,156 @@ router.get('/portfolio-analytics', authMiddleware, async (req, res) => {
   } catch (err) {
     console.error('Error fetching portfolio analytics:', err);
     res.status(500).json({ error: 'Failed to retrieve portfolio analytics' });
+  }
+});
+
+// GET /api/dashboard/district-counts
+// Authoritative aggregated project counts and expenditure per district
+router.get('/district-counts', authMiddleware, async (req, res) => {
+  try {
+    const rawState = req.query.state || req.user?.state;
+    const targetState = normalizeStateName(rawState) || 'Uttar Pradesh';
+    const scopeFilter = getAuthorityScopeFilter(req.user);
+
+    const andClauses = [];
+
+    // State filter matching both canonical and raw representation
+    const stateVariants = Array.from(new Set([
+      targetState,
+      targetState.toUpperCase(),
+      rawState ? rawState.trim() : null
+    ])).filter(Boolean);
+
+    andClauses.push({
+      OR: stateVariants.map(v => ({ state: { contains: v } }))
+    });
+
+    // Merge authority scope
+    if (Object.keys(scopeFilter).length > 0) {
+      if (scopeFilter.AND) {
+        andClauses.push(...scopeFilter.AND);
+      } else {
+        andClauses.push(scopeFilter);
+      }
+    }
+
+    const where = { AND: andClauses };
+
+    // High performance aggregate query across entire database
+    const rawGroups = await prisma.project.groupBy({
+      by: ['district'],
+      where,
+      _count: { id: true },
+      _sum: {
+        sanctionedAmount: true,
+        totalDisbursed: true
+      }
+    });
+
+    // Official districts for this state from master hierarchy
+    const officialDistricts = getCanonicalDistricts(targetState);
+
+    // Group projects by canonical district name
+    const districtMap = new Map();
+
+    for (const g of rawGroups) {
+      const rawDist = g.district || 'Unknown';
+      const canonicalDist = getCanonicalDistrict(rawDist, targetState);
+      const normKey = normalizeLocationName(canonicalDist);
+
+      if (!districtMap.has(normKey)) {
+        districtMap.set(normKey, {
+          district: canonicalDist,
+          normalizedDistrict: normKey,
+          projectCount: 0,
+          totalSanctioned: 0,
+          totalDisbursed: 0,
+          rawVariants: []
+        });
+      }
+      const entry = districtMap.get(normKey);
+      entry.projectCount += g._count.id;
+      entry.totalSanctioned += g._sum.sanctionedAmount || 0;
+      entry.totalDisbursed += g._sum.totalDisbursed || 0;
+      entry.rawVariants.push(rawDist);
+    }
+
+    // Combine with official list so ALL official districts are represented
+    const finalDistricts = [];
+    const seenNormKeys = new Set();
+
+    for (const offDist of officialDistricts) {
+      const normKey = normalizeLocationName(offDist);
+      seenNormKeys.add(normKey);
+
+      if (districtMap.has(normKey)) {
+        const item = districtMap.get(normKey);
+        finalDistricts.push({
+          district: offDist,
+          normalizedDistrict: normKey,
+          projectCount: item.projectCount,
+          totalSanctioned: item.totalSanctioned,
+          totalDisbursed: item.totalDisbursed,
+          sanctionedCr: parseFloat(((item.totalSanctioned || 0) / 10000000).toFixed(2)),
+          expenditureCr: parseFloat(((item.totalDisbursed || 0) / 10000000).toFixed(2))
+        });
+      } else {
+        // Genuinely 0 projects
+        finalDistricts.push({
+          district: offDist,
+          normalizedDistrict: normKey,
+          projectCount: 0,
+          totalSanctioned: 0,
+          totalDisbursed: 0,
+          sanctionedCr: 0,
+          expenditureCr: 0
+        });
+      }
+    }
+
+    // Also include any other districts with projects from DB that might not be in official list
+    for (const [normKey, item] of districtMap.entries()) {
+      if (!seenNormKeys.has(normKey) && item.projectCount > 0) {
+        finalDistricts.push({
+          district: item.district,
+          normalizedDistrict: normKey,
+          projectCount: item.projectCount,
+          totalSanctioned: item.totalSanctioned,
+          totalDisbursed: item.totalDisbursed,
+          sanctionedCr: parseFloat(((item.totalSanctioned || 0) / 10000000).toFixed(2)),
+          expenditureCr: parseFloat(((item.totalDisbursed || 0) / 10000000).toFixed(2))
+        });
+      }
+    }
+
+    // Sort by project count descending, then alphabetically
+    finalDistricts.sort((a, b) => {
+      if (b.projectCount !== a.projectCount) return b.projectCount - a.projectCount;
+      return a.district.localeCompare(b.district);
+    });
+
+    const totalProjects = finalDistricts.reduce((acc, d) => acc + d.projectCount, 0);
+    const totalSanctioned = finalDistricts.reduce((acc, d) => acc + d.totalSanctioned, 0);
+    const totalDisbursed = finalDistricts.reduce((acc, d) => acc + d.totalDisbursed, 0);
+    const districtsWithWorksCount = finalDistricts.filter(d => d.projectCount > 0).length;
+
+    // Diagnostic logging for development (Section 12)
+    if (req.query.debug === 'true' || process.env.NODE_ENV === 'development') {
+      console.log(`[Diagnostic] District Counts: State="${targetState}", Total Projects=${totalProjects}, Districts=${finalDistricts.length}, With Works=${districtsWithWorksCount}`);
+    }
+
+    res.json({
+      state: targetState,
+      totalProjects,
+      totalSanctionedCr: parseFloat((totalSanctioned / 10000000).toFixed(2)),
+      totalExpenditureCr: parseFloat((totalDisbursed / 10000000).toFixed(2)),
+      totalDistrictsCount: finalDistricts.length,
+      districtsWithWorksCount,
+      districts: finalDistricts
+    });
+  } catch (err) {
+    console.error('Error fetching district counts:', err);
+    res.status(500).json({ error: 'Failed to retrieve district counts' });
   }
 });
 

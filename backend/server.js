@@ -161,10 +161,10 @@ app.post('/api/auth/set-scope', authMiddleware, async (req, res) => {
     let targetState = state || req.user.state || 'All India';
     let targetDistrict = district || req.user.district || 'All Districts';
 
-    if (['MINISTRY', 'ADMIN', 'SUPER_ADMIN', 'MINISTER'].includes(targetRole)) {
+    if (['MINISTRY', 'ADMIN', 'SUPER_ADMIN'].includes(targetRole)) {
       targetState = 'All India';
       targetDistrict = 'All Districts';
-    } else if (targetRole === 'STATE') {
+    } else if (targetRole === 'STATE' || targetRole === 'MINISTER') {
       targetDistrict = 'All Districts';
     }
 
@@ -218,6 +218,9 @@ app.post('/api/auth/login', async (req, res) => {
     if (assignedRole === 'STATE') {
       assignedState = state || 'Uttar Pradesh';
       assignedDistrict = 'All Districts';
+    } else if (assignedRole === 'MINISTER') {
+      assignedState = state || 'Uttar Pradesh';
+      assignedDistrict = district || 'All Districts';
     } else if (assignedRole === 'DISTRICT') {
       assignedState = state || 'Uttar Pradesh';
       assignedDistrict = district || 'Varanasi';

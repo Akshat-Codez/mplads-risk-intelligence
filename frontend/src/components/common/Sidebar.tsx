@@ -1,19 +1,15 @@
 import React, { useState } from 'react';
-import { NavLink } from 'react-router-dom';
+import { NavLink, useLocation } from 'react-router-dom';
 import { 
   BarChart3, 
   FolderKanban, 
-  ShieldAlert, 
   Building2, 
   Briefcase, 
-  Bell, 
   PieChart, 
   History, 
-  Database,
-  ChevronLeft,
-  ChevronRight,
-  MapPin,
-  Camera
+  ChevronLeft, 
+  ChevronRight, 
+  MapPin 
 } from './Icons';
 import { useAuth } from '../../context/AuthContext';
 import { Role } from '../../types';
@@ -26,15 +22,15 @@ interface NavItem {
 
 const NAV_BY_ROLE: Record<Role, NavItem[]> = {
   MINISTER: [
-    { label: 'Executive Overview', path: '/app/minister', icon: BarChart3 },
-    { label: 'GIS Risk Priority Map', path: '/app/gis-analytics', icon: MapPin },
-    { label: 'MP Projects Explorer', path: '/app/projects', icon: FolderKanban },
-    { label: 'National Analytics', path: '/app/analytics', icon: PieChart }
+    { label: 'Executive Portfolio', path: '/app/minister', icon: BarChart3 },
+    { label: 'GIS Project Risk Map', path: '/app/gis-analytics', icon: MapPin },
+    { label: 'Portfolio Projects', path: '/app/projects', icon: FolderKanban },
+    { label: 'Portfolio Analytics', path: '/app/analytics', icon: PieChart }
   ],
   MINISTRY: [
     { label: 'National Overview', path: '/app/ministry', icon: BarChart3 },
     { label: 'Projects Explorer', path: '/app/projects', icon: FolderKanban },
-    { label: 'GIS Priority Map', path: '/app/gis-analytics', icon: MapPin },
+    { label: 'GIS Project Risk Map', path: '/app/gis-analytics', icon: MapPin },
     { label: 'Vendors & Cartels', path: '/app/vendors', icon: Building2 },
     { label: 'Investigations & Audits', path: '/app/investigations', icon: Briefcase },
     { label: 'Analytics & Reports', path: '/app/analytics', icon: PieChart },
@@ -42,7 +38,7 @@ const NAV_BY_ROLE: Record<Role, NavItem[]> = {
   ],
   STATE: [
     { label: 'State Overview', path: '/app/state', icon: BarChart3 },
-    { label: 'State GIS Map', path: '/app/gis-analytics', icon: MapPin },
+    { label: 'GIS Project Risk Map', path: '/app/gis-analytics', icon: MapPin },
     { label: 'District Projects', path: '/app/projects', icon: FolderKanban },
     { label: 'Vendor Concentration', path: '/app/vendors', icon: Building2 },
     { label: 'Escalated Cases', path: '/app/investigations', icon: Briefcase },
@@ -51,7 +47,7 @@ const NAV_BY_ROLE: Record<Role, NavItem[]> = {
   ],
   DISTRICT: [
     { label: 'District Action Hub', path: '/app/district', icon: BarChart3 },
-    { label: 'District GIS Map', path: '/app/gis-analytics', icon: MapPin },
+    { label: 'GIS Project Risk Map', path: '/app/gis-analytics', icon: MapPin },
     { label: 'Local Works Queue', path: '/app/projects', icon: FolderKanban },
     { label: 'Field Audits & Inspections', path: '/app/investigations', icon: Briefcase }
   ]
@@ -60,8 +56,30 @@ const NAV_BY_ROLE: Record<Role, NavItem[]> = {
 export const Sidebar: React.FC = () => {
   const [collapsed, setCollapsed] = useState(false);
   const { role } = useAuth();
+  const location = useLocation();
 
   const currentNavItems = NAV_BY_ROLE[role] || NAV_BY_ROLE['MINISTRY'];
+
+  // Robust active check ensuring National Overview is immediately highlighted upon login
+  const isItemActive = (itemPath: string) => {
+    // 1. Direct path match
+    if (location.pathname === itemPath) return true;
+    
+    // 2. Default landing path matching when on /app or /app/
+    if (location.pathname === '/app' || location.pathname === '/app/') {
+      if (role === 'MINISTRY' && itemPath === '/app/ministry') return true;
+      if (role === 'MINISTER' && itemPath === '/app/minister') return true;
+      if (role === 'STATE' && itemPath === '/app/state') return true;
+      if (role === 'DISTRICT' && itemPath === '/app/district') return true;
+    }
+
+    // 3. Sub-route matching (e.g. /app/projects/123 -> /app/projects)
+    if (itemPath !== '/app/ministry' && itemPath !== '/app/minister' && itemPath !== '/app/state' && itemPath !== '/app/district') {
+      if (location.pathname.startsWith(itemPath)) return true;
+    }
+
+    return false;
+  };
 
   return (
     <aside 
@@ -80,7 +98,7 @@ export const Sidebar: React.FC = () => {
               <div>
                 <h1 className="font-extrabold text-white text-base tracking-wide font-serif">NIRMAN</h1>
                 <p className="text-[10px] text-amber-400 font-bold uppercase tracking-wider">
-                  {role === 'MINISTER' ? 'Minister View' :
+                  {role === 'MINISTER' ? 'Minister Portfolio' :
                    role === 'STATE' ? 'State Authority' :
                    role === 'DISTRICT' ? 'District Collector' : 'Ministry MoSPI'}
                 </p>
@@ -95,7 +113,7 @@ export const Sidebar: React.FC = () => {
 
           <button 
             onClick={() => setCollapsed(!collapsed)}
-            className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition"
+            className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition cursor-pointer"
           >
             {collapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
           </button>
@@ -105,17 +123,17 @@ export const Sidebar: React.FC = () => {
         <nav className="p-3 space-y-1">
           {currentNavItems.map((item) => {
             const Icon = item.icon;
+            const active = isItemActive(item.path);
+
             return (
               <NavLink
                 key={item.label}
                 to={item.path}
-                className={({ isActive }) =>
-                  `flex items-center space-x-3 px-3.5 py-2.5 rounded-lg text-xs font-semibold transition ${
-                    isActive 
-                      ? 'bg-[#E65100] text-white shadow-md font-bold' 
-                      : 'text-slate-300 hover:bg-slate-800/80 hover:text-white'
-                  }`
-                }
+                className={`flex items-center space-x-3 px-3.5 py-2.5 rounded-lg text-xs font-semibold transition ${
+                  active 
+                    ? 'bg-[#E65100] text-white shadow-md font-bold' 
+                    : 'text-slate-300 hover:bg-slate-800/80 hover:text-white'
+                }`}
               >
                 <Icon size={18} />
                 {!collapsed && <span>{item.label}</span>}

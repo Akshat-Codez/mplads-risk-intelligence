@@ -115,7 +115,7 @@ export const Login: React.FC = () => {
       await login(
         username,
         selectedRole,
-        selectedRole === 'MINISTRY' || selectedRole === 'MINISTER' ? 'All India' : (selectedState || 'All India'),
+        selectedRole === 'MINISTRY' ? 'All India' : (selectedState || 'Uttar Pradesh'),
         selectedRole === 'DISTRICT' ? (selectedDistrict || 'All Districts') : 'All Districts',
         password
       );
@@ -199,11 +199,11 @@ export const Login: React.FC = () => {
               </select>
             </div>
 
-            {/* Dynamic State Selection for State & District Authority */}
-            {(selectedRole === 'STATE' || selectedRole === 'DISTRICT') && (
+            {/* Dynamic State Selection for Minister Portfolio, State & District Authority */}
+            {(selectedRole === 'MINISTER' || selectedRole === 'STATE' || selectedRole === 'DISTRICT') && (
               <div>
                 <label className="block font-bold text-slate-700 mb-1">
-                  Select Authorized State <span className="text-red-500">*</span>
+                  {selectedRole === 'MINISTER' ? 'Assigned State Portfolio / Regional Area' : 'Select Authorized State'} <span className="text-red-500">*</span>
                 </label>
                 <select
                   value={selectedState}

@@ -157,7 +157,7 @@ export const GISAnalytics: React.FC = () => {
             </span>
           </div>
           <h1 className="text-3xl font-black text-slate-900 font-serif tracking-tight pt-1">
-            GIS Risk Priority Heatmap
+            GIS Project Risk Map
           </h1>
           <p className="text-xs text-slate-500 font-medium">
             Role-scoped spatial risk intelligence and anomaly indicators across Indian States & Districts.

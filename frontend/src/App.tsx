@@ -29,11 +29,11 @@ import { Contact } from './pages/public/Contact';
 const RoleBasedHome: React.FC = () => {
   const { role } = useAuth();
   switch (role) {
-    case 'MINISTER': return <MinisterDashboard />;
-    case 'MINISTRY': return <MinistryDashboard />;
-    case 'STATE': return <StateDashboard />;
-    case 'DISTRICT': return <DistrictDashboard />;
-    default: return <MinistryDashboard />;
+    case 'MINISTER': return <Navigate to="/app/minister" replace />;
+    case 'MINISTRY': return <Navigate to="/app/ministry" replace />;
+    case 'STATE': return <Navigate to="/app/state" replace />;
+    case 'DISTRICT': return <Navigate to="/app/district" replace />;
+    default: return <Navigate to="/app/ministry" replace />;
   }
 };
 
